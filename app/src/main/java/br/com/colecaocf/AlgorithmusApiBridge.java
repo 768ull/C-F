@@ -142,7 +142,9 @@ final class AlgorithmusApiBridge {
               // Cache only read-only story data. Mutations and protected actions
               // must still be confirmed by the server when the device is online.
               function cacheable(action) {
-                return action === 'messages/list' ||
+                return action === 'social-feed' ||
+                       action === 'social-state' ||
+                       action === 'messages/list' ||
                        action === 'messages/open' ||
                        action === 'messages/final' ||
                        action === 'diary/state' ||
