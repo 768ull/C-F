@@ -179,7 +179,7 @@ final class AlgorithmusApiBridge {
                 }));
               }
 
-              function offlineResponse(action, body) {
+              function offlineResponse(action, body, allowNativeBridge) {
                 var cached = readCache(action, body);
                 if (cached !== null) {
                   return Promise.resolve(new Response(cached, {
@@ -191,7 +191,9 @@ final class AlgorithmusApiBridge {
                     }
                   }));
                 }
-                return unavailableResponse(ApiBridge.fetchApi(action, body));
+                return unavailableResponse(allowNativeBridge
+                    ? ApiBridge.fetchApi(action, body)
+                    : '{"ok":false,"error":"sem-internet"}');
               }
 
               window.fetch = function (input, init) {
@@ -225,9 +227,9 @@ final class AlgorithmusApiBridge {
                             headers: response.headers
                           });
                         }).catch(function () { return response; });
-                      }).catch(function () { return offlineResponse(action, body); });
+                      }).catch(function () { return offlineResponse(action, body, false); });
                     }
-                    return offlineResponse(action, body);
+                    return offlineResponse(action, body, true);
                   }
                 } catch (e) {
                   /* segue para o fetch nativo */
