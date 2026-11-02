@@ -39,6 +39,6 @@ Para habilitar a assinatura automática das próximas versões, adicione o segre
 
 Todas as variantes instaláveis são assinadas com a mesma keystore permanente, fornecida ao workflow por GitHub Actions Secrets. O workflow interrompe a compilação se a chave estável não estiver configurada; não publica APKs assinados com chaves debug efêmeras.
 
-Configure os secrets `CF_ANDROID_KEYSTORE_B64`, `CF_ANDROID_KEYSTORE_PASSWORD`, `CF_ANDROID_KEY_ALIAS` e `CF_ANDROID_KEY_PASSWORD` conforme o arquivo de instruções fornecido ao mantenedor. Nunca coloque a keystore ou senhas em commits.
+Configure o único segredo `CF_ANDROID_SIGNING_PACKAGE_B64` conforme o arquivo privado `CF-Android-Signing-One-Secret-Instructions.txt` fornecido ao mantenedor. Nunca coloque a keystore ou senhas em commits.
 
 **Migração inicial:** APKs anteriores foram gerados como debug e assinados pela keystore temporária do runner. A nova keystore estável é uma identidade de assinatura nova, portanto o Android exigirá remover a instalação anterior uma única vez. Essa remoção apaga o armazenamento privado do app. Depois da migração, futuras versões com o mesmo applicationId, versionCode crescente e a mesma keystore atualizam por cima. 
