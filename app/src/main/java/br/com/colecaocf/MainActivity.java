@@ -400,19 +400,19 @@ public final class MainActivity extends Activity {
      */
     private void patchCobrinhaApple(File base) throws Exception {
         String original =
-                "var fruit = ctx.createLinearGradient(0, -r, 0, r);\\n" +
-                "        fruit.addColorStop(0, \"#df7863\");\\n" +
-                "        fruit.addColorStop(.5, pal[\"--food\"]);\\n" +
-                "        fruit.addColorStop(1, pal[\"--food-shade\"]);\\n" +
-                "        ctx.fillStyle = fruit;\\n" +
+                "var fruit = ctx.createLinearGradient(0, -r, 0, r);\n" +
+                "        fruit.addColorStop(0, \"#df7863\");\n" +
+                "        fruit.addColorStop(.5, pal[\"--food\"]);\n" +
+                "        fruit.addColorStop(1, pal[\"--food-shade\"]);\n" +
+                "        ctx.fillStyle = fruit;\n" +
                 "        ctx.fill();";
         String replacement =
-                "ctx.save();\\n" +
-                "        ctx.clip();\\n" +
-                "        ctx.fillStyle = \"#2E7D32\";\\n" +
-                "        ctx.fillRect(-r * 1.2, -r * 1.3, r * 1.2, r * 2.6);\\n" +
-                "        ctx.fillStyle = \"#E53935\";\\n" +
-                "        ctx.fillRect(0, -r * 1.3, r * 1.2, r * 2.6);\\n" +
+                "ctx.save();\n" +
+                "        ctx.clip();\n" +
+                "        ctx.fillStyle = \"#2E7D32\";\n" +
+                "        ctx.fillRect(-r * 1.2, -r * 1.3, r * 1.2, r * 2.6);\n" +
+                "        ctx.fillStyle = \"#E53935\";\n" +
+                "        ctx.fillRect(0, -r * 1.3, r * 1.2, r * 2.6);\n" +
                 "        ctx.restore(); /*CF_APPLE_HALF_SPLIT*/";
         patchText(new File(base, "apps/cobrinha/js/render.js"),
                 original, replacement, "CF_APPLE_HALF_SPLIT");
