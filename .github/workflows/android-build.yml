@@ -38,6 +38,13 @@ jobs:
           test -f app/build.gradle
           test -f app/src/main/AndroidManifest.xml
           test -f app/src/main/java/br/com/colecaocf/MainActivity.java
+          test -f app/src/main/assets/bundle_parts/00.b64
+
+      - name: Reconstruct and validate the two original games
+        run: |
+          gradle --no-daemon :app:prepareGameBundle
+          unzip -t app/src/main/assets/games.bundle.zip
+          unzip -l app/src/main/assets/games.bundle.zip | grep -E 'apps/(frutris|cobrinha)/index.html|assets/img/Icones/(frutris|cobrinha).webp|js/exit-game.js'
 
       - name: Build APK and AAB
         run: gradle --no-daemon :app:assembleDebug :app:bundleDebug
