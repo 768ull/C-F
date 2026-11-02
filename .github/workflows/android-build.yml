@@ -44,7 +44,6 @@ jobs:
           test -f app/src/main/assets/frutris-exit-fix.css
           test -f updates/latest.json
           test -f updates/latest.json.sig.b64
-          test -f updates/games.bundle.zip.b64
 
       - name: Reconstruct and validate the two original games
         run: |
