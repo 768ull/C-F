@@ -2,6 +2,7 @@ package br.com.colecaocf;
 
 import android.app.Activity;
 import android.content.res.ColorStateList;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.util.Base64;
 import android.graphics.BitmapFactory;
@@ -539,6 +540,36 @@ public final class MainActivity extends Activity {
         body.addView(siteGap, new LinearLayout.LayoutParams(1, dp(14)));
         body.addView(gameCard("Simulador completo", "Algorithomus · telefone interativo com todos os aplicativos", null, "algorithomus", R.drawable.ic_algorithomus));
 
+        LinearLayout supportCard = new LinearLayout(this);
+        supportCard.setOrientation(LinearLayout.VERTICAL);
+        supportCard.setPadding(dp(14), dp(12), dp(14), dp(10));
+        supportCard.setBackground(rounded(CARD, 18, Color.rgb(70, 61, 88)));
+        LinearLayout.LayoutParams supportParams = new LinearLayout.LayoutParams(-1, -2);
+        supportParams.topMargin = dp(18);
+        supportParams.bottomMargin = dp(4);
+        body.addView(supportCard, supportParams);
+
+        TextView supportTitle = label("APOIE O TORAJO", 12, TEXT, true);
+        supportTitle.setLetterSpacing(.1f);
+        supportCard.addView(supportTitle, new LinearLayout.LayoutParams(-1, dp(26)));
+        TextView supportSubtitle = label("Conheça, acompanhe e participe", 11, MUTED, false);
+        supportCard.addView(supportSubtitle, new LinearLayout.LayoutParams(-1, dp(22)));
+
+        supportCard.addView(supportLinkItem(
+                "CANAL NO YOUTUBE",
+                "Inscreva-se e acompanhe os vídeos",
+                "https://youtube.com/@torajo?si=K1F2cw5ktRqczQt6"));
+        supportCard.addView(supportDivider());
+        supportCard.addView(supportLinkItem(
+                "SITE OFICIAL",
+                "Acesse o Mundo Torajo",
+                "https://mundotorajo.com.br/?atualizar=1"));
+        supportCard.addView(supportDivider());
+        supportCard.addView(supportLinkItem(
+                "INGRESSOS",
+                "Confira eventos e ingressos",
+                "https://mundotorajo.com.br/ingressos/"));
+
         TextView updateButton = label("VERIFICAR ATUALIZAÇÕES", 12, TEXT, true);
         updateButton.setGravity(Gravity.CENTER);
         updateButton.setBackground(new RippleDrawable(
@@ -559,6 +590,58 @@ public final class MainActivity extends Activity {
         fp.topMargin = dp(22);
         body.addView(footer, fp);
         root.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    private View supportLinkItem(String title, String detail, String url) {
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.HORIZONTAL);
+        item.setGravity(Gravity.CENTER_VERTICAL);
+        item.setPadding(dp(8), dp(7), dp(8), dp(7));
+        item.setMinimumHeight(dp(58));
+        item.setBackground(new RippleDrawable(
+                ColorStateList.valueOf(Color.argb(35, 255, 255, 255)),
+                rounded(Color.TRANSPARENT, 10, Color.TRANSPARENT), null));
+        item.setClickable(true);
+        item.setFocusable(true);
+        item.setContentDescription(title + ". " + detail);
+
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        copy.setGravity(Gravity.CENTER_VERTICAL);
+        copy.addView(label(title, 12, TEXT, true),
+                new LinearLayout.LayoutParams(-1, dp(22)));
+        copy.addView(label(detail, 10, MUTED, false),
+                new LinearLayout.LayoutParams(-1, dp(20)));
+        item.addView(copy, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        TextView arrow = label("↗", 20, MUTED, true);
+        arrow.setGravity(Gravity.CENTER);
+        item.addView(arrow, new LinearLayout.LayoutParams(dp(30), dp(40)));
+        item.setOnClickListener(v -> openSupportUrl(url));
+        return item;
+    }
+
+    private View supportDivider() {
+        View divider = new View(this);
+        divider.setBackgroundColor(Color.argb(35, 255, 255, 255));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(1));
+        params.topMargin = dp(2);
+        params.bottomMargin = dp(2);
+        divider.setLayoutParams(params);
+        return divider;
+    }
+
+    private void openSupportUrl(String url) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            startActivity(intent);
+        } catch (android.content.ActivityNotFoundException error) {
+            Toast.makeText(this, "Nenhum navegador ou aplicativo disponível para abrir o link.",
+                    Toast.LENGTH_LONG).show();
+        } catch (Exception error) {
+            Toast.makeText(this, "Não foi possível abrir o link.",
+                    Toast.LENGTH_LONG).show();
+        }
     }
 
     private View gameCard(String title, String detail, String iconName, String id, int iconRes) {
