@@ -107,7 +107,7 @@ jobs:
           if not key or len(key) > 65536:
               raise SystemExit("Keystore ausente ou inválida.")
           required = ("storePassword", "keyAlias", "keyPassword")
-          if any(not isinstance(config.get(k), str) or not config[k] or "\\n" in config[k] for k in required):
+          if any(not isinstance(config.get(k), str) or not config[k] or "\n" in config[k] for k in required):
               raise SystemExit("Configuração de assinatura incompleta.")
           key_path = os.path.join(target, "cf-android-signing.jks")
           with open(key_path, "wb") as output:
@@ -120,10 +120,13 @@ jobs:
           }
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
               for name, value in values.items():
-                  env.write(f"{name}={value}\\n")
+                  env.write(f"{name}={value}\n")
           PY
-          keytool -list -keystore "$RUNNER_TEMP/cf-android-signing.jks" \\
+      - name: Verify permanent Android signing key
+        run: |
+          keytool -list -keystore "$CF_ANDROID_KEYSTORE_PATH" \
             -storepass "$CF_ANDROID_KEYSTORE_PASSWORD" -alias "$CF_ANDROID_KEY_ALIAS" >/dev/null
+
       - name: Build APK and AAB
         run: gradle --no-daemon :app:assembleDebug :app:bundleDebug
 
