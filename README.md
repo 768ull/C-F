@@ -1,4 +1,4 @@
-# C-F — Coleção de Jogos Android
+# C-F-A — Coleção de Jogos e Aplicativos para Android
 
 Projeto Android Gradle organizado diretamente na raiz do repositório.
 
