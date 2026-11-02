@@ -15,12 +15,13 @@ android {
     }
 
     signingConfigs {
-        stable {
-            def keyPath = System.getenv("CF_ANDROID_KEYSTORE_PATH")
-            storeFile file(keyPath ?: "missing-cf-signing-key.jks")
-            storePassword System.getenv("CF_ANDROID_KEYSTORE_PASSWORD") ?: ""
-            keyAlias System.getenv("CF_ANDROID_KEY_ALIAS") ?: "cf-release"
-            keyPassword System.getenv("CF_ANDROID_KEY_PASSWORD") ?: ""
+        if (System.getenv("CF_ANDROID_KEYSTORE_PATH")) {
+            stable {
+                storeFile file(System.getenv("CF_ANDROID_KEYSTORE_PATH"))
+                storePassword System.getenv("CF_ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("CF_ANDROID_KEY_ALIAS") ?: "cf-release"
+                keyPassword System.getenv("CF_ANDROID_KEY_PASSWORD")
+            }
         }
     }
 
@@ -28,11 +29,15 @@ android {
         debug {
             applicationIdSuffix ".debug"
             versionNameSuffix "-debug"
-            signingConfig signingConfigs.stable
+            if (System.getenv("CF_ANDROID_KEYSTORE_PATH")) {
+                signingConfig signingConfigs.stable
+            }
         }
         release {
             minifyEnabled false
-            signingConfig signingConfigs.stable
+            if (System.getenv("CF_ANDROID_KEYSTORE_PATH")) {
+                signingConfig signingConfigs.stable
+            }
         }
     }
 
