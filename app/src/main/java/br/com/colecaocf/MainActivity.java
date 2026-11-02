@@ -58,6 +58,7 @@ public final class MainActivity extends Activity {
     private static final String UPDATE_BUNDLE_URL = "https://raw.githubusercontent.com/768ull/C-F/main/updates/games.bundle.zip.b64";
     private static final String PREFS_NAME = "cf-persistent-data";
     private static final int INITIAL_BUNDLE_VERSION = 1;
+    private static final String BUNDLE_MARKER = ".bundle-v7";
 
     private FrameLayout root;
     private WebView webView;
@@ -66,6 +67,7 @@ public final class MainActivity extends Activity {
     private volatile boolean gameOpen;
     private volatile String activeGameId;
     private int lastReportedScore;
+    private int scoreSession;
     private boolean assetsReady;
     private SharedPreferences appPrefs;
     private TextView scoreTotalView;
@@ -114,7 +116,7 @@ public final class MainActivity extends Activity {
     }
 
     private boolean installGameFiles() {
-        File marker = new File(webRoot, ".bundle-v7");
+        File marker = new File(webRoot, BUNDLE_MARKER);
         File f = new File(webRoot, "apps/frutris/index.html");
         File c = new File(webRoot, "apps/cobrinha/index.html");
         File frutrisIcon = new File(webRoot, "assets/img/Icones/frutris.webp");
@@ -222,9 +224,11 @@ public final class MainActivity extends Activity {
                         .putLong("last_update_check", System.currentTimeMillis())
                         .apply();
                 runOnUiThread(() -> {
-                    showCollection();
-                    enterImmersive();
                     Toast.makeText(this, "Jogos atualizados com segurança.", Toast.LENGTH_LONG).show();
+                    if (!gameOpen) {
+                        showCollection();
+                        enterImmersive();
+                    }
                 });
             } catch (Exception error) {
                 appPrefs.edit().putLong("last_update_check", System.currentTimeMillis()).apply();
@@ -323,6 +327,7 @@ public final class MainActivity extends Activity {
             throw new java.io.IOException("Não foi possível instalar o pacote novo.");
         }
         deleteTree(backup);
+        try (FileOutputStream out = new FileOutputStream(new File(webRoot, BUNDLE_MARKER))) { out.write(1); }
         assetsReady = true;
     }
 
@@ -551,8 +556,12 @@ public final class MainActivity extends Activity {
 
     private void openGame(String id) {
         if (!assetsReady) { showCollection(); return; }
+        final int session;
+        synchronized (this) {
+            session = ++scoreSession;
+            lastReportedScore = 0;
+        }
         activeGameId = id;
-        lastReportedScore = 0;
         gameOpen = true;
         root.removeAllViews();
         webView = new WebView(this);
@@ -575,11 +584,15 @@ public final class MainActivity extends Activity {
         s.setBlockNetworkLoads(true);
         webView.addJavascriptInterface(new Object() {
             @JavascriptInterface public void exitGame() {
-                runOnUiThread(() -> { if (gameOpen) { showCollection(); enterImmersive(); } });
+                runOnUiThread(() -> {
+                    if (session != scoreSession) return;
+                    if (gameOpen) { showCollection(); enterImmersive(); }
+                });
             }
             @JavascriptInterface public void reportScore(String gameId, int score) {
                 if (score < 0 || score > 1000000000) return;
                 synchronized (MainActivity.this) {
+                    if (session != scoreSession) return;
                     if (!gameOpen || activeGameId == null || !activeGameId.equals(gameId)) return;
                     if (score < lastReportedScore) {
                         lastReportedScore = score;
@@ -591,7 +604,7 @@ public final class MainActivity extends Activity {
                     String key = gameId + "_points";
                     long current = appPrefs.getLong(key, 0L);
                     long updated = current > Long.MAX_VALUE - delta ? Long.MAX_VALUE : current + delta;
-                    appPrefs.edit().putLong(key, updated).commit();
+                    appPrefs.edit().putLong(key, updated).apply();
                 }
             }
         }, "CFAndroid");
