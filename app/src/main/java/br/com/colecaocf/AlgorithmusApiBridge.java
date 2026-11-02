@@ -179,7 +179,7 @@ final class AlgorithmusApiBridge {
                 }));
               }
 
-              function offlineResponse(action, body, allowNativeBridge) {
+              function offlineResponse(action, body) {
                 var cached = readCache(action, body);
                 if (cached !== null) {
                   return Promise.resolve(new Response(cached, {
@@ -191,9 +191,7 @@ final class AlgorithmusApiBridge {
                     }
                   }));
                 }
-                return unavailableResponse(allowNativeBridge
-                    ? ApiBridge.fetchApi(action, body)
-                    : '{"ok":false,"error":"sem-internet"}');
+                return unavailableResponse('{"ok":false,"error":"sem-internet"}');
               }
 
               window.fetch = function (input, init) {
@@ -209,9 +207,16 @@ final class AlgorithmusApiBridge {
                   if (init && typeof init.body === 'string') { body = init.body; }
                   var action = apiAction(url);
                   if (action !== null) {
-                    if (ApiBridge.isOnline() && nativeFetch) {
+                    if (ApiBridge.isOnline()) {
                       // Send each online POST once. On a network failure, reuse
                       // only a previously cached read response when one exists.
+                      if (!nativeFetch) {
+                        return Promise.resolve(new Response(ApiBridge.fetchApi(action, body), {
+                          status: 200,
+                          statusText: 'OK',
+                          headers: { 'Content-Type': 'application/json' }
+                        }));
+                      }
                       return nativeFetch(input, init).then(function (response) {
                         var contentType = response.headers ?
                             (response.headers.get('Content-Type') || '') : '';
@@ -227,9 +232,9 @@ final class AlgorithmusApiBridge {
                             headers: response.headers
                           });
                         }).catch(function () { return response; });
-                      }).catch(function () { return offlineResponse(action, body, false); });
+                      }).catch(function () { return offlineResponse(action, body); });
                     }
-                    return offlineResponse(action, body, true);
+                    return offlineResponse(action, body);
                   }
                 } catch (e) {
                   /* segue para o fetch nativo */
