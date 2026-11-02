@@ -184,9 +184,9 @@ jobs:
           printf '%s\\n' "$BADGING" | grep -E "application:.*icon="
           printf '%s\\n' "$BADGING" | grep -F "launchable-activity:"
           unzip -Z1 "$APK" | grep -Fx "res/mipmap-anydpi-v26/ic_launcher.xml"
-          unzip -Z1 "$APK" | grep -Fx "res/mipmap-nodpi/ic_launcher.webp"
+          unzip -Z1 "$APK" | grep -E "^res/mipmap-nodpi(-v[0-9]+)?/ic_launcher\\.webp$"
           unzip -Z1 "$APK" | grep -Fx "res/drawable/ic_launcher_foreground.xml"
-          unzip -Z1 "$APK" | grep -Fx "res/drawable-nodpi/ic_launcher_cfa.webp"
+          unzip -Z1 "$APK" | grep -E "^res/drawable-nodpi(-v[0-9]+)?/ic_launcher_cfa\\.webp$"
           echo "APK assinado, pacote e ícone adaptativo validados."
 
       - name: Compose artifact name from versionName
