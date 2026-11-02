@@ -195,13 +195,13 @@ def extract_refs(data, page_path):
     except Exception:
         return []
 
-    script_base = (js_document_base(page_path)
+    source_base = (js_document_base(page_path)
                    if page_path.lower().endswith((".js", ".mjs"))
                    else page_path)
     candidates = []
-    candidates.extend((ref, page_path) for ref in ATTR_RE.findall(text))
-    candidates.extend((ref, page_path) for ref in CSS_URL_RE.findall(text))
-    candidates.extend((ref, script_base) for ref in FILE_RE.findall(text))
+    candidates.extend((ref, source_base) for ref in ATTR_RE.findall(text))
+    candidates.extend((ref, source_base) for ref in CSS_URL_RE.findall(text))
+    candidates.extend((ref, source_base) for ref in FILE_RE.findall(text))
 
     out = []
     seen = set()
