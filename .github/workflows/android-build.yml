@@ -59,6 +59,19 @@ jobs:
           python3 tools/mirror_site.py
           test -f app/src/main/assets/site/index.html
 
+      - name: Validate the mirrored Algorithomus content
+        run: |
+          test -f app/src/main/assets/site/index.html
+          grep -q "Algorithomus" app/src/main/assets/site/index.html
+          if grep -qiE "cf-chl|Just a moment|Attention Required" app/src/main/assets/site/index.html; then
+            echo "::error::O espelho do Algorithomus recebeu uma pagina de bloqueio (Cloudflare) em vez do jogo real. Rode o workflow novamente."
+            exit 1
+          fi
+          test -n "$(find app/src/main/assets/site -name '*.js' -print -quit)"
+          if [ ! -f app/src/main/assets/site/media-manifest.json ]; then
+            echo "::warning::media-manifest.json ausente do espelho; o modo offline do jogo pode ficar incompleto."
+          fi
+
       - name: Load permanent Android signing key (optional until repository secret is saved)
         id: signing
         env:

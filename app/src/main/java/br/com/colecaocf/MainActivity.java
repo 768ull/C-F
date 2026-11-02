@@ -39,6 +39,7 @@ import java.io.FileInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Locale;
 import java.net.URL;
@@ -572,35 +573,65 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private boolean algorithmusOpen() {
+        return gameOpen && "algorithomus".equals(activeGameId);
+    }
+
+    /**
+     * Roteamento híbrido das requisições do WebView. Durante o Algorithomus, o
+     * jogo roda no endereço real https://algorithomus.com.br: com internet, as
+     * requisições ao domínio real seguem direto para os servidores originais do
+     * jogo (retorno null deixa o WebView falar com a rede); sem internet, as
+     * mesmas requisições são atendidas pelo espelho embutido no APK. O domínio
+     * virtual continua atendendo os jogos Frutris e Cobrinha. Qualquer outro
+     * endereço externo permanece bloqueado.
+     */
     private WebResourceResponse route(Uri u) {
-        if (!HOST.equals(u.getHost())) return blocked();
+        String host = u.getHost();
+        if (algorithmusOpen() && AlgorithmusNet.REAL_HOST.equals(host)) {
+            return serveAlgorithmus(u, true);
+        }
+        if (!HOST.equals(host)) return blocked();
         String path = u.getPath();
         if (path == null) path = "/";
         if (path.startsWith("/local/")) {
             return assetLoader.shouldInterceptRequest(u);
         }
-        if (gameOpen && "algorithomus".equals(activeGameId)) {
-            return serveAlgorithmus(u, path);
+        if (algorithmusOpen()) {
+            return serveAlgorithmus(u, false);
         }
         return assetLoader.shouldInterceptRequest(u);
     }
 
-    private WebResourceResponse serveAlgorithmus(Uri u, String path) {
+    /**
+     * Atende uma requisição do jogo Algorithomus. Com allowNetwork e conexão
+     * ativa, o retorno null entrega a requisição ao servidor real do jogo
+     * (inclusive as chamadas /api/, que o jogo faz por fetch na mesma origem).
+     * O espelho embutido serve primeiro os arquivos estáticos; offline, ele
+     * passa a responder tudo que existir no espelho.
+     */
+    private WebResourceResponse serveAlgorithmus(Uri u, boolean allowNetwork) {
+        String path = u.getPath();
+        if (path == null) path = "/";
         String lower = path.toLowerCase(Locale.ROOT);
         if (lower.contains("cloudflareinsights") || lower.contains("beacon.min.js")) {
             return new WebResourceResponse("text/plain", "UTF-8", 204, "No Content",
                     Collections.emptyMap(), AlgorithmusNet.emptyStream());
         }
+        if (path.startsWith("/api/")) {
+            return allowNetwork && AlgorithmusNet.isOnline(this) ? null : apiOfflineJson();
+        }
         WebResourceResponse mirrored = algorithmusSite.open(u);
         if (mirrored != null) return mirrored;
-        String pq = u.getQuery() == null ? path : path + "?" + u.getQuery();
-        AlgorithmusNet.WebResourceResponseLike proxied = AlgorithmusNet.proxyGet(this, pq);
-        if (proxied != null) {
-            String reason = proxied.statusCode == 206 ? "Partial Content" : "OK";
-            return new WebResourceResponse(proxied.mime, null,
-                    proxied.statusCode, reason, proxied.headers(), proxied.stream);
-        }
-        return AlgorithmusSiteHandler.notFound(AlgorithmusSiteHandler.guessMime(path));
+        return allowNetwork && AlgorithmusNet.isOnline(this) ? null
+                : AlgorithmusSiteHandler.notFound(AlgorithmusSiteHandler.guessMime(path));
+    }
+
+    /** Resposta JSON de servidor indisponível, usada no modo offline. */
+    private WebResourceResponse apiOfflineJson() {
+        byte[] body = AlgorithmusNet.errorJson("sem-internet").getBytes(StandardCharsets.UTF_8);
+        return new WebResourceResponse("application/json", "UTF-8", 200, "OK",
+                Collections.emptyMap(), new ByteArrayInputStream(body));
     }
 
     private void openGame(String id) {
@@ -639,12 +670,12 @@ public final class MainActivity extends Activity {
         s.setTextZoom(100);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        s.setBlockNetworkLoads(true);
+        s.setBlockNetworkLoads(!siteGame);
         if (siteGame) {
             s.setLoadWithOverviewMode(true);
             s.setUseWideViewPort(true);
             webView.addJavascriptInterface(new AlgorithmusApiBridge(this), "ApiBridge");
-            WebViewCompat.addDocumentStartJavaScript(webView, AlgorithmusApiBridge.FETCH_SHIM, Collections.singleton("https://" + HOST));
+            WebViewCompat.addDocumentStartJavaScript(webView, AlgorithmusApiBridge.FETCH_SHIM, Collections.singleton(AlgorithmusNet.REAL_ORIGIN));
         }
         webView.addJavascriptInterface(new Object() {
             @JavascriptInterface public void exitGame() {
@@ -688,11 +719,13 @@ public final class MainActivity extends Activity {
                 return route(Uri.parse(url));
             }
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
-                return !HOST.equals(r.getUrl().getHost());
+                String h = r.getUrl().getHost();
+                if (HOST.equals(h)) return false;
+                return !(siteGame && AlgorithmusNet.REAL_HOST.equals(h));
             }
         });
         root.addView(webView, new FrameLayout.LayoutParams(-1, -1));
-        webView.loadUrl(siteGame ? "https://" + HOST + "/index.html" : "https://" + HOST + "/local/apps/" + id + "/index.html");
+        webView.loadUrl(siteGame ? AlgorithmusNet.REAL_ORIGIN + "/index.html" : "https://" + HOST + "/local/apps/" + id + "/index.html");
         enterImmersive();
     }
 

@@ -16,13 +16,17 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Rede do jogo Algorithomus, executada sempre pelo código nativo do aplicativo:
- * o WebView permanece sem acesso à rede; somente esta classe fala com o servidor
- * real https://algorithomus.com.br (funcionamento híbrido).
+ * Rede do jogo Algorithomus. O jogo roda no endereço real
+ * https://algorithomus.com.br dentro do WebView: com internet, o próprio
+ * WebView conversa diretamente com os servidores originais do jogo; sem
+ * internet, as requisições são atendidas pelo espelho local embutido no APK.
+ * Esta classe cuida da verificação de conectividade, das respostas de erro
+ * offline e do proxy legado de arquivos individuais.
  */
 final class AlgorithmusNet {
 
     public static final String REAL_ORIGIN = "https://algorithomus.com.br";
+    public static final String REAL_HOST = "algorithomus.com.br";
     private static final String USER_AGENT =
             "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 "
                     + "(KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36";
@@ -113,7 +117,7 @@ final class AlgorithmusNet {
 
         public Map<String, String> headers() {
             Map<String, String> h = new HashMap<>();
-            h.put("Access-Control-Allow-Origin", "https://appassets.androidplatform.net");
+            h.put("Access-Control-Allow-Origin", "https://" + REAL_HOST);
             if (lengthBytes >= 0) {
                 h.put("Content-Length", String.valueOf(lengthBytes));
             }

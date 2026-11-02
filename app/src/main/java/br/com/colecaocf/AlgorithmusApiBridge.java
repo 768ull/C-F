@@ -12,12 +12,12 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Ponte entre o JavaScript do jogo Algorithomus e o aplicativo:
- * intercepta as chamadas fetch('/api/...') e as encaminha ao servidor real
- * (https://algorithomus.com.br) mesmo com o jogo rodando no domínio virtual,
- * mantendo o WebView sem acesso direto à rede. Quando não há conexão, devolve
- * imediatamente o erro "sem-internet" para o jogo continuar utilizável no modo
- * offline com os arquivos espelhados.
+ * Ponte entre o JavaScript do jogo Algorithomus e o aplicativo. O jogo roda no
+ * endereço real https://algorithomus.com.br dentro do WebView: com internet,
+ * as chamadas /api/ seguem direto para os servidores originais pelo próprio
+ * WebView (mesma origem do jogo); sem internet, a ponte devolve imediatamente
+ * o erro "sem-internet" para o jogo continuar utilizável no modo offline com
+ * os arquivos espelhados no APK.
  */
 final class AlgorithmusApiBridge {
 
@@ -27,10 +27,17 @@ final class AlgorithmusApiBridge {
         this.context = context;
     }
 
+    /** Indica ao jogo se há conexão de internet utilizável no momento. */
+    @JavascriptInterface
+    public boolean isOnline() {
+        return AlgorithmusNet.isOnline(context);
+    }
+
     /**
      * Chamadas POST /api/&lt;ação&gt; do jogo (wifi-state, wifi-clues, call, pattern,
      * secret-state, diary/questions, diary/answer, diary/prepare, diary/final-media).
      * Executada na thread de ponte do WebView; retorna a resposta JSON como String.
+     * Usada como fallback quando não há conexão (devolve "sem-internet").
      */
     @JavascriptInterface
     public String fetchApi(String action, String body) {
@@ -96,11 +103,14 @@ final class AlgorithmusApiBridge {
 
     /**
      * Script injetado no início de cada documento (página principal e iframes dos
-     * apps) antes de qualquer código do site rodar: redefine window.fetch para que
-     * chamadas em /api/ sejam atendidas por AlgorithmusApiBridge.fetchApi (POST ao
-     * servidor real), mantendo a mesma assinatura de Promise/Response que o jogo
-     * espera. As demais chamadas seguem para o fetch nativo, que o aplicativo
-     * mantém restrito ao domínio virtual.
+     * apps) antes de qualquer código do site rodar: redefine window.fetch para
+     * que as chamadas em /api/ (relativas ou absolutas, no endereço real do
+     * jogo) sejam tratadas de forma híbrida. Com internet, a chamada segue para
+     * o fetch nativo do WebView, que conversa diretamente com os servidores
+     * originais (mesma origem do jogo, com cookies e TLS reais). Sem internet,
+     * a ponte nativa devolve a resposta offline "sem-internet" com a mesma
+     * assinatura de Promise/Response que o jogo espera. As demais chamadas
+     * seguem sempre para o fetch nativo.
      */
     public static final String FETCH_SHIM = """
             (function () {
@@ -108,12 +118,20 @@ final class AlgorithmusApiBridge {
               window.__CF_ARG_SHIM__ = true;
 
               var nativeFetch = window.fetch ? window.fetch.bind(window) : null;
+              var ORIGIN = 'https://algorithomus.com.br';
+              var API_BASE = ORIGIN + '/api/';
               var ACTION_OK = /^[A-Za-z0-9/_-]+$/;
 
               function apiAction(url) {
                 if (typeof url !== 'string') { return null; }
-                if (url.indexOf('/api/') !== 0) { return null; }
-                var rest = url.substring(5);
+                var rest = null;
+                if (url.indexOf(API_BASE) === 0) {
+                  rest = url.substring(API_BASE.length);
+                } else if (url.indexOf('/api/') === 0) {
+                  rest = url.substring(5);
+                } else {
+                  return null;
+                }
                 var action = rest.split('?')[0].split('#')[0];
                 if (!ACTION_OK.test(action)) { return null; }
                 return action;
@@ -132,6 +150,9 @@ final class AlgorithmusApiBridge {
                   if (init && init.body) { body = String(init.body); }
                   var action = apiAction(url);
                   if (action !== null) {
+                    if (ApiBridge.isOnline() && nativeFetch) {
+                      return nativeFetch(input, init);
+                    }
                     var text = ApiBridge.fetchApi(action, body);
                     return Promise.resolve(
                       new Response(text, {
