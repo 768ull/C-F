@@ -50,6 +50,7 @@ public final class MainActivity extends Activity {
     private File webRoot;
     private boolean gameOpen;
     private boolean assetsReady;
+    private View nativeExitButton;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -179,6 +180,7 @@ public final class MainActivity extends Activity {
             webView = null;
         }
         root.removeAllViews();
+        nativeExitButton = null;
         root.setBackgroundColor(BG);
 
         ScrollView scroll = new ScrollView(this);
@@ -261,6 +263,25 @@ public final class MainActivity extends Activity {
         return card;
     }
 
+    private TextView createNativeExitButton() {
+        TextView exit = label("SAIR", 11, TEXT, true);
+        exit.setGravity(Gravity.CENTER);
+        exit.setLetterSpacing(.08f);
+        exit.setContentDescription("Sair do Frutris e voltar à coleção");
+        exit.setBackground(new RippleDrawable(
+                ColorStateList.valueOf(Color.argb(48, 255, 255, 255)),
+                rounded(Color.rgb(25, 26, 36), 6, Color.rgb(91, 78, 116)),
+                null));
+        exit.setClickable(true);
+        exit.setFocusable(true);
+        exit.setOnClickListener(v -> {
+            if (gameOpen) {
+                showCollection();
+                enterImmersive();
+            }
+        });
+        return exit;
+    }
     private WebResourceResponse blocked() {
         return new WebResourceResponse("text/plain", "UTF-8", 403, "Offline",
                 Collections.emptyMap(), new ByteArrayInputStream(new byte[0]));
@@ -294,6 +315,12 @@ public final class MainActivity extends Activity {
             }
         }, "CFAndroid");
         webView.setWebViewClient(new WebViewClient() {
+            @Override public void onPageFinished(WebView v, String url) {
+                super.onPageFinished(v, url);
+                if ("frutris".equals(id)) {
+                    v.evaluateJavascript("(function(){var b=document.getElementById('exitGameBtn');if(b)b.style.display='none';})();", null);
+                }
+            }
             @Override public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
                 Uri u = r.getUrl();
                 return HOST.equals(u.getHost()) ? assetLoader.shouldInterceptRequest(u) : blocked();
@@ -307,6 +334,14 @@ public final class MainActivity extends Activity {
             }
         });
         root.addView(webView, new FrameLayout.LayoutParams(-1, -1));
+        if ("frutris".equals(id)) {
+            nativeExitButton = createNativeExitButton();
+            FrameLayout.LayoutParams exitParams = new FrameLayout.LayoutParams(
+                    dp(56), dp(34), Gravity.TOP | Gravity.END);
+            exitParams.topMargin = dp(8);
+            exitParams.rightMargin = dp(10);
+            root.addView(nativeExitButton, exitParams);
+        }
         webView.loadUrl("https://" + HOST + "/local/apps/" + id + "/index.html");
         enterImmersive();
     }
