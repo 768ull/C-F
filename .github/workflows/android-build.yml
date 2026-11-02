@@ -2,6 +2,8 @@ name: Android build
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [ main ]
   push:
     branches: [ main ]
     paths-ignore:
@@ -174,6 +176,7 @@ jobs:
           fi
 
       - name: Publish the next signed game update (when the repository secret is configured)
+        if: github.event_name != 'pull_request'
         env:
           CF_UPDATE_PRIVATE_KEY_PEM: ${{ secrets.CF_UPDATE_PRIVATE_KEY_PEM }}
         run: |
