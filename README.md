@@ -28,7 +28,7 @@ A tela inicial exibe o placar geral, que soma os pontos de Frutris e Cobrinha se
 
 ## Atualizações seguras dos jogos
 
-O botão **VERIFICAR ATUALIZAÇÕES** consulta um manifesto hospedado neste repositório. O app valida uma assinatura RSA/SHA-256 com a chave pública embarcada e depois confere o SHA-256 do pacote antes de substituir os arquivos locais. O WebView continua sem acesso à rede; somente o atualizador nativo acessa os três endereços HTTPS fixos de `raw.githubusercontent.com`.
+O botão **VERIFICAR ATUALIZAÇÕES** consulta um manifesto hospedado neste repositório. O app valida uma assinatura RSA/SHA-256 com a chave pública embarcada e depois confere o SHA-256 do pacote antes de substituir os arquivos locais. O WebView continua sem acesso à rede; somente o atualizador nativo acessa os três endereços HTTPS fixos de `raw.githubusercontent.com`. O workflow publica um novo pacote OTA assinado somente depois que a validação e a compilação do Android terminam com sucesso.
 
 Para habilitar a assinatura automática das próximas versões, adicione o segredo de repositório **CF_UPDATE_PRIVATE_KEY_PEM** em **Settings → Secrets and variables → Actions** com o conteúdo do arquivo privado fornecido fora do repositório. Nunca envie essa chave ao GitHub como arquivo comum, commit ou variável pública. Sem esse segredo, a compilação dos APKs continua funcionando, mas o workflow não publica novos pacotes OTA assinados.
 
