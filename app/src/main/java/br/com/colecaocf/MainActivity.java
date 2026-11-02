@@ -348,24 +348,24 @@ public final class MainActivity extends Activity {
     private void patchGameScoreBridge(File base) throws Exception {
         patchText(new File(base, "apps/frutris/js/engine.js"),
                 "state.score += T.TSPIN_SCORE;",
-                "state.score += T.TSPIN_SCORE; if (window.CFAndroid) window.CFAndroid.reportScore('frutris', state.score);",
-                "CFAndroid.reportScore('frutris'");
+                "state.score += T.TSPIN_SCORE; if (window.CFAndroid) window.CFAndroid.reportScore('frutris', state.score); /*CF_SCORE_TSPIN*/",
+                "CF_SCORE_TSPIN");
         patchText(new File(base, "apps/frutris/js/engine.js"),
                 "state.score += baseScore;",
-                "state.score += baseScore; if (window.CFAndroid) window.CFAndroid.reportScore('frutris', state.score);",
-                "CFAndroid.reportScore('frutris'");
+                "state.score += baseScore; if (window.CFAndroid) window.CFAndroid.reportScore('frutris', state.score); /*CF_SCORE_LINES*/",
+                "CF_SCORE_LINES");
         patchText(new File(base, "apps/frutris/js/state.js"),
                 "Object.assign(T.state, T.createInitialState());",
-                "Object.assign(T.state, T.createInitialState()); if (window.CFAndroid) window.CFAndroid.reportScore('frutris', 0);",
-                "CFAndroid.reportScore('frutris'");
+                "Object.assign(T.state, T.createInitialState()); if (window.CFAndroid) window.CFAndroid.reportScore('frutris', 0); /*CF_SCORE_RESET*/",
+                "CF_SCORE_RESET");
         patchText(new File(base, "apps/cobrinha/js/engine.js"),
                 "s.score += C.SCORE.perFood;",
-                "s.score += C.SCORE.perFood; if (window.CFAndroid) window.CFAndroid.reportScore('cobrinha', s.score);",
-                "CFAndroid.reportScore('cobrinha'");
+                "s.score += C.SCORE.perFood; if (window.CFAndroid) window.CFAndroid.reportScore('cobrinha', s.score); /*CF_SCORE_FOOD*/",
+                "CF_SCORE_FOOD");
         patchText(new File(base, "apps/cobrinha/js/state.js"),
                 "s.score = 0;",
-                "s.score = 0; if (window.CFAndroid) window.CFAndroid.reportScore('cobrinha', 0);",
-                "CFAndroid.reportScore('cobrinha'");
+                "s.score = 0; if (window.CFAndroid) window.CFAndroid.reportScore('cobrinha', 0); /*CF_SCORE_RESET*/",
+                "CF_SCORE_RESET");
     }
 
     private void patchText(File file, String original, String replacement, String marker) throws Exception {
