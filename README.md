@@ -2,6 +2,10 @@
 
 Projeto Android Gradle organizado diretamente na raiz do repositório.
 
+## Identidade visual
+
+O aplicativo usa o ícone C-F-A em formato adaptativo do Android, com arte própria da coleção e fallback para versões anteriores ao Android 8.0.
+
 ## Estrutura
 - `settings.gradle`, `build.gradle` e `gradle.properties` na raiz.
 - Código Android e recursos em `app/src/main/`.
