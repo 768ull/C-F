@@ -13,25 +13,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - name: Install Android SDK
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+
+      - name: Install Android SDK packages
+        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
+
       - name: Verify project layout
         run: |
           test -f settings.gradle
           test -f build.gradle
           test -f app/build.gradle
           test -f app/src/main/AndroidManifest.xml
-      - name: Build
+          test -f app/src/main/java/br/com/colecaocf/MainActivity.java
+
+      - name: Build APK and AAB
         run: gradle --no-daemon :app:assembleDebug :app:bundleDebug
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: CF-Collection-Android
           path: |
