@@ -7,7 +7,7 @@ android {
     compileSdk 36
 
     defaultConfig {
-        applicationId "br.com.colecaocf"
+        applicationId "br.com.cfa"
         minSdk 24
         targetSdk 35
         versionCode 14
