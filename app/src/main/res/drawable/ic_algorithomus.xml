@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Cabo da maçã -->
+    <path
+        android:fillColor="#5D4037"
+        android:pathData="M53,40 C53,32 55.5,26 61,21.5 C62.2,20.6 64,21.8 63,23.2 C58.8,27.8 57,33.2 57,40 Z" />
+
+    <!-- Folha -->
+    <path
+        android:fillColor="#43A047"
+        android:pathData="M60,27 C62.5,19 71,15 78.5,17.5 C77.5,25.5 69,30.5 60,27 Z" />
+
+    <!-- Corpo da maçã: metade verde, metade vermelha (verde → laranja → vermelho) -->
+    <path
+        android:pathData="M54,38 C50,31 42,28 35,32 C25,37 22,52 27,66 C31,77 39,88 47,88 C50,88 52,86 54,86 C56,86 58,88 61,88 C69,88 77,77 81,66 C86,52 83,37 73,32 C66,28 58,31 54,38 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startColor="#1B5E20"
+                android:centerColor="#FF9800"
+                android:endColor="#E53935"
+                android:startX="24"
+                android:startY="60"
+                android:endX="84"
+                android:endY="60"
+                android:type="linear" />
+        </aapt:attr>
+    </path>
+</vector>

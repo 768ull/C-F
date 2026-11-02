@@ -31,6 +31,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.webkit.WebViewAssetLoader;
+import androidx.webkit.WebViewCompat;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -63,6 +64,7 @@ public final class MainActivity extends Activity {
     private FrameLayout root;
     private WebView webView;
     private WebViewAssetLoader assetLoader;
+    private AlgorithmusSiteHandler algorithmusSite;
     private File webRoot;
     private volatile boolean gameOpen;
     private volatile String activeGameId;
@@ -89,6 +91,7 @@ public final class MainActivity extends Activity {
                 .setDomain(HOST)
                 .addPathHandler("/local/", new WebViewAssetLoader.InternalStoragePathHandler(this, webRoot))
                 .build();
+        algorithmusSite = new AlgorithmusSiteHandler(this);
         showCollection();
         enterImmersive();
         maybeCheckForGameUpdates();
@@ -454,7 +457,7 @@ public final class MainActivity extends Activity {
         title.setLetterSpacing(-.04f);
         body.addView(title, new LinearLayout.LayoutParams(-1, dp(60)));
 
-        TextView subtitle = label("Dois jogos. Uma coleção.", 15, MUTED, false);
+        TextView subtitle = label("Três experiências. Uma coleção.", 15, MUTED, false);
         LinearLayout.LayoutParams sub = new LinearLayout.LayoutParams(-1, dp(32));
         sub.bottomMargin = dp(20);
         body.addView(subtitle, sub);
@@ -484,10 +487,13 @@ public final class MainActivity extends Activity {
         body.addView(scoreCard, scoreParams);
         refreshScoreBoard();
 
-        body.addView(gameCard("Frutris", "Jogo de blocos · controles por gestos", "frutris.webp", "frutris"));
+        body.addView(gameCard("Frutris", "Jogo de blocos · controles por gestos", "frutris.webp", "frutris", 0));
         View gap = new View(this);
         body.addView(gap, new LinearLayout.LayoutParams(1, dp(14)));
-        body.addView(gameCard("Cobrinha", "Jogo da cobrinha · deslize para direcionar", "cobrinha.webp", "cobrinha"));
+        body.addView(gameCard("Cobrinha", "Jogo da cobrinha · deslize para direcionar", "cobrinha.webp", "cobrinha", 0));
+        View siteGap = new View(this);
+        body.addView(siteGap, new LinearLayout.LayoutParams(1, dp(14)));
+        body.addView(gameCard("Algorithomus", "ARG interativo · celular encontrado", null, "algorithomus", R.drawable.ic_algorithomus));
 
         TextView updateButton = label("VERIFICAR ATUALIZAÇÕES", 12, TEXT, true);
         updateButton.setGravity(Gravity.CENTER);
@@ -511,7 +517,7 @@ public final class MainActivity extends Activity {
         root.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
     }
 
-    private View gameCard(String title, String detail, String iconName, String id) {
+    private View gameCard(String title, String detail, String iconName, String id, int iconRes) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.HORIZONTAL);
         card.setGravity(Gravity.CENTER_VERTICAL);
@@ -523,8 +529,12 @@ public final class MainActivity extends Activity {
         card.setContentDescription("Abrir " + title);
 
         ImageView icon = new ImageView(this);
-        File iconFile = new File(webRoot, "assets/img/Icones/" + iconName);
-        icon.setImageBitmap(BitmapFactory.decodeFile(iconFile.getAbsolutePath()));
+        if (iconRes != 0) {
+            icon.setImageResource(iconRes);
+        } else {
+            File iconFile = new File(webRoot, "assets/img/Icones/" + iconName);
+            icon.setImageBitmap(BitmapFactory.decodeFile(iconFile.getAbsolutePath()));
+        }
         icon.setScaleType(ImageView.ScaleType.CENTER_CROP);
         icon.setBackground(rounded(Color.rgb(35,36,40), 16, Color.TRANSPARENT));
         icon.setClipToOutline(true);
@@ -554,8 +564,56 @@ public final class MainActivity extends Activity {
                 Collections.emptyMap(), new ByteArrayInputStream(new byte[0]));
     }
 
+    private boolean algorithmusMirrorAvailable() {
+        try (InputStream in = getAssets().open("site/index.html")) {
+            return in.read() != -1;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private WebResourceResponse route(Uri u) {
+        if (!HOST.equals(u.getHost())) return blocked();
+        String path = u.getPath();
+        if (path == null) path = "/";
+        if (path.startsWith("/local/")) {
+            return assetLoader.shouldInterceptRequest(u);
+        }
+        if (gameOpen && "algorithomus".equals(activeGameId)) {
+            return serveAlgorithmus(u, path);
+        }
+        return assetLoader.shouldInterceptRequest(u);
+    }
+
+    private WebResourceResponse serveAlgorithmus(Uri u, String path) {
+        String lower = path.toLowerCase(Locale.ROOT);
+        if (lower.contains("cloudflareinsights") || lower.contains("beacon.min.js")) {
+            return new WebResourceResponse("text/plain", "UTF-8", 204, "No Content",
+                    Collections.emptyMap(), AlgorithmusNet.emptyStream());
+        }
+        WebResourceResponse mirrored = algorithmusSite.open(u);
+        if (mirrored != null) return mirrored;
+        String pq = u.getQuery() == null ? path : path + "?" + u.getQuery();
+        AlgorithmusNet.WebResourceResponseLike proxied = AlgorithmusNet.proxyGet(this, pq);
+        if (proxied != null) {
+            String reason = proxied.statusCode == 206 ? "Partial Content" : "OK";
+            return new WebResourceResponse(proxied.mime, null,
+                    proxied.statusCode, reason, proxied.headers(), proxied.stream);
+        }
+        return AlgorithmusSiteHandler.notFound(AlgorithmusSiteHandler.guessMime(path));
+    }
+
     private void openGame(String id) {
-        if (!assetsReady) { showCollection(); return; }
+        boolean siteGame = "algorithomus".equals(id);
+        if (siteGame) {
+            if (!algorithmusMirrorAvailable()) {
+                Toast.makeText(this, "O espelho do Algorithomus não está incluído nesta compilação.", Toast.LENGTH_LONG).show();
+                return;
+            }
+        } else if (!assetsReady) {
+            showCollection();
+            return;
+        }
         final int session;
         synchronized (this) {
             session = ++scoreSession;
@@ -582,6 +640,12 @@ public final class MainActivity extends Activity {
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         s.setBlockNetworkLoads(true);
+        if (siteGame) {
+            s.setLoadWithOverviewMode(true);
+            s.setUseWideViewPort(true);
+            webView.addJavascriptInterface(new AlgorithmusApiBridge(this), "ApiBridge");
+            WebViewCompat.addDocumentStartJavaScript(webView, AlgorithmusApiBridge.FETCH_SHIM, Collections.singleton("https://" + HOST));
+        }
         webView.addJavascriptInterface(new Object() {
             @JavascriptInterface public void exitGame() {
                 runOnUiThread(() -> {
@@ -618,19 +682,17 @@ public final class MainActivity extends Activity {
                 }
             }
             @Override public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
-                Uri u = r.getUrl();
-                return HOST.equals(u.getHost()) ? assetLoader.shouldInterceptRequest(u) : blocked();
+                return route(r.getUrl());
             }
             @Override public WebResourceResponse shouldInterceptRequest(WebView v, String url) {
-                Uri u = Uri.parse(url);
-                return HOST.equals(u.getHost()) ? assetLoader.shouldInterceptRequest(u) : blocked();
+                return route(Uri.parse(url));
             }
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
                 return !HOST.equals(r.getUrl().getHost());
             }
         });
         root.addView(webView, new FrameLayout.LayoutParams(-1, -1));
-        webView.loadUrl("https://" + HOST + "/local/apps/" + id + "/index.html");
+        webView.loadUrl(siteGame ? "https://" + HOST + "/index.html" : "https://" + HOST + "/local/apps/" + id + "/index.html");
         enterImmersive();
     }
 
