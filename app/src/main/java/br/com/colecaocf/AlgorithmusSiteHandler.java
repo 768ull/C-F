@@ -6,12 +6,14 @@ import android.net.Uri;
 import android.webkit.WebResourceResponse;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.util.HashMap;
 import java.util.Locale;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -45,9 +47,56 @@ final class AlgorithmusSiteHandler {
         }
         WebResourceResponse response = openAsset(path);
         if (response != null) {
+            if ("/apps/cobrinha/js/render.js".equals(path)) {
+                response = patchCobrinhaApple(response);
+            }
             response.setResponseHeaders(headersFor());
         }
         return response;
+    }
+
+    /**
+     * Mantém a mesma maçã 50/50 dentro do simulador Algorithomus.
+     * O arquivo original vem do espelho do site e não é alterado no APK em disco.
+     */
+    private WebResourceResponse patchCobrinhaApple(WebResourceResponse originalResponse) {
+        byte[] sourceBytes;
+        try (InputStream input = originalResponse.getData();
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[4096];
+            int count;
+            while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+            sourceBytes = output.toByteArray();
+        } catch (IOException error) {
+            return originalResponse;
+        }
+
+        String script = new String(sourceBytes, StandardCharsets.UTF_8);
+        if (!script.contains("CF_APPLE_HALF_SPLIT")) {
+            String original =
+                    "var fruit = ctx.createLinearGradient(0, -r, 0, r);\n" +
+                    "        fruit.addColorStop(0, \"#df7863\");\n" +
+                    "        fruit.addColorStop(.5, pal[\"--food\"]);\n" +
+                    "        fruit.addColorStop(1, pal[\"--food-shade\"]);\n" +
+                    "        ctx.fillStyle = fruit;\n" +
+                    "        ctx.fill();";
+            String replacement =
+                    "ctx.save();\n" +
+                    "        ctx.clip();\n" +
+                    "        ctx.fillStyle = \"#2E7D32\";\n" +
+                    "        ctx.fillRect(-r * 1.2, -r * 1.3, r * 1.2, r * 2.6);\n" +
+                    "        ctx.fillStyle = \"#E53935\";\n" +
+                    "        ctx.fillRect(0, -r * 1.3, r * 1.2, r * 2.6);\n" +
+                    "        ctx.restore(); /*CF_APPLE_HALF_SPLIT*/";
+            if (script.contains(original)) {
+                script = script.replace(original, replacement);
+            }
+        }
+
+        return new WebResourceResponse(
+                "application/javascript",
+                "UTF-8",
+                new ByteArrayInputStream(script.getBytes(StandardCharsets.UTF_8)));
     }
 
     private WebResourceResponse openAsset(String rawPath) {
