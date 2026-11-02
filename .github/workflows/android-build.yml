@@ -152,7 +152,7 @@ jobs:
           echo "Assinatura permanente validada."
           {
             echo "### Assinatura permanente validada"
-            echo "O APK/AAB sera gerado com o certificado permanente C-F."
+            echo "O APK/AAB sera gerado com o certificado permanente C-F-A."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build APK and AAB with permanent signature
@@ -170,10 +170,10 @@ jobs:
           BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
           if [ "$CF_STABLE_SIGNING_AVAILABLE" = "true" ]; then
             APK="app/build/outputs/apk/release/app-release.apk"
-            EXPECTED_ID="br.com.colecaocf"
+            EXPECTED_ID="br.com.cfa"
           else
             APK="app/build/outputs/apk/debug/app-debug.apk"
-            EXPECTED_ID="br.com.colecaocf.debug"
+            EXPECTED_ID="br.com.cfa.debug"
           fi
           test -s "$APK"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
@@ -194,9 +194,9 @@ jobs:
             exit 1
           fi
           if [ "$CF_STABLE_SIGNING_AVAILABLE" = "true" ]; then
-            echo "CF_ARTIFACT_NAME=CF-Collection-Android-${version}-stable-signed" >> "$GITHUB_ENV"
+            echo "CF_ARTIFACT_NAME=CFA-Android-${version}-stable-signed" >> "$GITHUB_ENV"
           else
-            echo "CF_ARTIFACT_NAME=CF-Collection-Android-${version}-debug" >> "$GITHUB_ENV"
+            echo "CF_ARTIFACT_NAME=CFA-Android-${version}-debug" >> "$GITHUB_ENV"
           fi
 
       - name: Publish the next signed game update (when the repository secret is configured)
@@ -262,16 +262,16 @@ jobs:
           if [ "$CF_STABLE_SIGNING_AVAILABLE" = "true" ]; then
             APK="app/build/outputs/apk/release/app-release.apk"
             TAG="v${version}"
-            FILE="CF-Collection-Android-${version}.apk"
-            TITLE="C-F Collection v${version} (stable signed)"
-            NOTES="APK assinado com o certificado permanente C-F. Instalacao direta."
+            FILE="CFA-Android-${version}.apk"
+            TITLE="C-F-A v${version} (stable signed)"
+            NOTES="APK assinado com o certificado permanente C-F-A. Instalacao direta."
             PRE=""
           else
             APK="app/build/outputs/apk/debug/app-debug.apk"
             TAG="v${version}-debug"
-            FILE="CF-Collection-Android-${version}-debug.apk"
-            TITLE="C-F Collection v${version} (development build)"
-            NOTES="APK de desenvolvimento assinado com certificado temporario (pacote br.com.colecaocf.debug). Cada nova versao de desenvolvimento exige desinstalar a versao de desenvolvimento anterior antes de instalar esta. A versao estavel, com certificado permanente, sera publicada quando o segredo CF_ANDROID_SIGNING_PACKAGE_B64 for cadastrado no repositorio."
+            FILE="CFA-Android-${version}-debug.apk"
+            TITLE="C-F-A v${version} (development build)"
+            NOTES="APK de desenvolvimento assinado com certificado temporario (pacote br.com.cfa.debug). Cada nova versao de desenvolvimento exige desinstalar a versao de desenvolvimento anterior antes de instalar esta. A versao estavel, com certificado permanente, sera publicada quando o segredo CF_ANDROID_SIGNING_PACKAGE_B64 for cadastrado no repositorio."
             PRE="--prerelease"
           fi
           cp "$APK" "$FILE"
