@@ -86,13 +86,30 @@ jobs:
             git push
           fi
 
+      - name: Set up permanent Android signing key
+        env:
+          CF_ANDROID_KEYSTORE_B64: ${{ secrets.CF_ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$CF_ANDROID_KEYSTORE_B64" ]; then
+            echo "::error::Configure CF_ANDROID_KEYSTORE_B64, CF_ANDROID_KEYSTORE_PASSWORD, CF_ANDROID_KEY_ALIAS e CF_ANDROID_KEY_PASSWORD em Settings > Secrets and variables > Actions. APK debug sem chave estável não será gerado."
+            exit 1
+          fi
+          echo "$CF_ANDROID_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/cf-android-signing.jks"
+          keytool -list -keystore "$RUNNER_TEMP/cf-android-signing.jks" \
+            -storepass "$CF_ANDROID_KEYSTORE_PASSWORD" -alias "$CF_ANDROID_KEY_ALIAS" >/dev/null
+          echo "CF_ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/cf-android-signing.jks" >> "$GITHUB_ENV"
+
       - name: Build APK and AAB
+        env:
+          CF_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.CF_ANDROID_KEYSTORE_PASSWORD }}
+          CF_ANDROID_KEY_ALIAS: ${{ secrets.CF_ANDROID_KEY_ALIAS }}
+          CF_ANDROID_KEY_PASSWORD: ${{ secrets.CF_ANDROID_KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleDebug :app:bundleDebug
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: CF-Collection-Android
+          name: CF-Collection-Android-1.1.2-stable-signed
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/bundle/debug/app-debug.aab
