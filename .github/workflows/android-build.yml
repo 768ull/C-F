@@ -88,24 +88,43 @@ jobs:
 
       - name: Set up permanent Android signing key
         env:
-          CF_ANDROID_KEYSTORE_B64: ${{ secrets.CF_ANDROID_KEYSTORE_B64 }}
-          CF_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.CF_ANDROID_KEYSTORE_PASSWORD }}
-          CF_ANDROID_KEY_ALIAS: ${{ secrets.CF_ANDROID_KEY_ALIAS }}
+          CF_ANDROID_SIGNING_PACKAGE_B64: ${{ secrets.CF_ANDROID_SIGNING_PACKAGE_B64 }}
         run: |
-          if [ -z "$CF_ANDROID_KEYSTORE_B64" ]; then
-            echo "::error::Configure CF_ANDROID_KEYSTORE_B64, CF_ANDROID_KEYSTORE_PASSWORD, CF_ANDROID_KEY_ALIAS e CF_ANDROID_KEY_PASSWORD em Settings > Secrets and variables > Actions. APK debug sem chave estável não será gerado."
+          if [ -z "$CF_ANDROID_SIGNING_PACKAGE_B64" ]; then
+            echo "::error::Cadastre o segredo único CF_ANDROID_SIGNING_PACKAGE_B64 em Settings > Secrets and variables > Actions. Instruções no arquivo CF-Android-Signing-One-Secret-Instructions.txt."
             exit 1
           fi
-          echo "$CF_ANDROID_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/cf-android-signing.jks"
-          keytool -list -keystore "$RUNNER_TEMP/cf-android-signing.jks" \
+          printf '%s' "$CF_ANDROID_SIGNING_PACKAGE_B64" | base64 --decode > "$RUNNER_TEMP/cf-signing-package.zip"
+          python3 - "$RUNNER_TEMP/cf-signing-package.zip" "$RUNNER_TEMP" <<'PY'
+          import json, os, sys, zipfile
+          archive_path, target = sys.argv[1], sys.argv[2]
+          with zipfile.ZipFile(archive_path) as archive:
+              expected = {"cf-android-signing.jks", "signing.json"}
+              if set(archive.namelist()) != expected:
+                  raise SystemExit("Pacote de assinatura inválido: conteúdo inesperado.")
+              key = archive.read("cf-android-signing.jks")
+              config = json.loads(archive.read("signing.json"))
+          if not key or len(key) > 65536:
+              raise SystemExit("Keystore ausente ou inválida.")
+          required = ("storePassword", "keyAlias", "keyPassword")
+          if any(not isinstance(config.get(k), str) or not config[k] or "\\n" in config[k] for k in required):
+              raise SystemExit("Configuração de assinatura incompleta.")
+          key_path = os.path.join(target, "cf-android-signing.jks")
+          with open(key_path, "wb") as output:
+              output.write(key)
+          values = {
+              "CF_ANDROID_KEYSTORE_PATH": key_path,
+              "CF_ANDROID_KEYSTORE_PASSWORD": config["storePassword"],
+              "CF_ANDROID_KEY_ALIAS": config["keyAlias"],
+              "CF_ANDROID_KEY_PASSWORD": config["keyPassword"],
+          }
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              for name, value in values.items():
+                  env.write(f"{name}={value}\\n")
+          PY
+          keytool -list -keystore "$RUNNER_TEMP/cf-android-signing.jks" \\
             -storepass "$CF_ANDROID_KEYSTORE_PASSWORD" -alias "$CF_ANDROID_KEY_ALIAS" >/dev/null
-          echo "CF_ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/cf-android-signing.jks" >> "$GITHUB_ENV"
-
       - name: Build APK and AAB
-        env:
-          CF_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.CF_ANDROID_KEYSTORE_PASSWORD }}
-          CF_ANDROID_KEY_ALIAS: ${{ secrets.CF_ANDROID_KEY_ALIAS }}
-          CF_ANDROID_KEY_PASSWORD: ${{ secrets.CF_ANDROID_KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleDebug :app:bundleDebug
 
       - name: Upload Android artifacts
