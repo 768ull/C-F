@@ -89,10 +89,13 @@ public final class MainActivity extends Activity {
     }
 
     private boolean installGameFiles() {
-        File marker = new File(webRoot, ".bundle-v3");
+        File marker = new File(webRoot, ".bundle-v4");
         File f = new File(webRoot, "apps/frutris/index.html");
         File c = new File(webRoot, "apps/cobrinha/index.html");
-        if (marker.isFile() && f.isFile() && c.isFile()) return true;
+        File frutrisIcon = new File(webRoot, "assets/img/Icones/frutris.webp");
+        File cobrinhaIcon = new File(webRoot, "assets/img/Icones/cobrinha.webp");
+        File exitScript = new File(webRoot, "js/exit-game.js");
+        if (marker.isFile() && f.isFile() && c.isFile() && frutrisIcon.isFile() && cobrinhaIcon.isFile() && exitScript.isFile()) return true;
         deleteTree(webRoot);
         if (!webRoot.mkdirs() && !webRoot.isDirectory()) return false;
         try (InputStream in = getAssets().open("games.bundle.zip");
@@ -116,7 +119,9 @@ public final class MainActivity extends Activity {
                 }
                 zip.closeEntry();
             }
-            if (!f.isFile() || !c.isFile()) return false;
+            if (!f.isFile() || !c.isFile() || !frutrisIcon.isFile() || !cobrinhaIcon.isFile() || !exitScript.isFile()) {
+                throw new IllegalStateException("O pacote não contém os dois jogos, os ícones originais e o script de saída.");
+            }
             try (FileOutputStream out = new FileOutputStream(marker)) { out.write(1); }
             return true;
         } catch (Exception ex) {
