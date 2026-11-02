@@ -150,12 +150,9 @@ final class AlgorithmusApiBridge {
               }
 
               function cacheKey(action, body) {
-                var value = action + '|' + (body || '{}');
-                var hash = 2166136261;
-                for (var i = 0; i < value.length; i++) {
-                  hash = Math.imul(hash ^ value.charCodeAt(i), 16777619);
-                }
-                return CACHE_PREFIX + (hash >>> 0).toString(16) + ':' + value.length;
+                // These read endpoints use tiny stable bodies (empty, contact id or day).
+                // Encoding the body avoids hash collisions between different contacts.
+                return CACHE_PREFIX + action + ':' + encodeURIComponent(body || '{}');
               }
 
               function readCache(action, body) {
@@ -220,11 +217,18 @@ final class AlgorithmusApiBridge {
                       return nativeFetch(input, init).then(function (response) {
                         var contentType = response.headers ?
                             (response.headers.get('Content-Type') || '') : '';
+                        if (response.status >= 500 && cacheable(action)) {
+                          return offlineResponse(action, body);
+                        }
                         if (!response.ok || !cacheable(action) ||
                             contentType.toLowerCase().indexOf('json') === -1) {
                           return response;
                         }
                         return response.clone().text().then(function (text) {
+                          try {
+                            var payload = JSON.parse(text);
+                            if (payload && payload.ok === false) return response;
+                          } catch (e) { return response; }
                           writeCache(action, body, text);
                           return new Response(text, {
                             status: response.status,
