@@ -33,3 +33,12 @@ O botão **VERIFICAR ATUALIZAÇÕES** consulta um manifesto hospedado neste repo
 Para habilitar a assinatura automática das próximas versões, adicione o segredo de repositório **CF_UPDATE_PRIVATE_KEY_PEM** em **Settings → Secrets and variables → Actions** com o conteúdo do arquivo privado fornecido fora do repositório. Nunca envie essa chave ao GitHub como arquivo comum, commit ou variável pública. Sem esse segredo, a compilação dos APKs continua funcionando, mas o workflow não publica novos pacotes OTA assinados.
 
 **Limite do Android:** atualizações OTA deste mecanismo substituem os arquivos dos jogos e preservam pontuação/recordes sem reinstalar o app. Alterações no código nativo ou na interface Android ainda exigem uma atualização do APK/AAB assinado com a mesma chave de instalação; o Android sempre pode pedir confirmação antes da instalação.
+
+
+## Assinatura permanente do APK (obrigatória)
+
+Todas as variantes instaláveis são assinadas com a mesma keystore permanente, fornecida ao workflow por GitHub Actions Secrets. O workflow interrompe a compilação se a chave estável não estiver configurada; não publica APKs assinados com chaves debug efêmeras.
+
+Configure os secrets `CF_ANDROID_KEYSTORE_B64`, `CF_ANDROID_KEYSTORE_PASSWORD`, `CF_ANDROID_KEY_ALIAS` e `CF_ANDROID_KEY_PASSWORD` conforme o arquivo de instruções fornecido ao mantenedor. Nunca coloque a keystore ou senhas em commits.
+
+**Migração inicial:** APKs anteriores foram gerados como debug e assinados pela keystore temporária do runner. A nova keystore estável é uma identidade de assinatura nova, portanto o Android exigirá remover a instalação anterior uma única vez. Essa remoção apaga o armazenamento privado do app. Depois da migração, futuras versões com o mesmo applicationId, versionCode crescente e a mesma keystore atualizam por cima. 
