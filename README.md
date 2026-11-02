@@ -5,17 +5,21 @@ Projeto Android Gradle organizado diretamente na raiz do repositório.
 ## Estrutura
 - `settings.gradle`, `build.gradle` e `gradle.properties` na raiz.
 - Código Android e recursos em `app/src/main/`.
+- `tools/` com scripts de apoio à compilação (`tools/mirror_site.py`).
 - `.github/` reservado ao workflow de compilação em `.github/workflows/android-build.yml`.
 
 ## Compilar
 Com JDK 17, Android SDK API 36 e Gradle 8.13:
 ```bash
+python3 tools/mirror_site.py
 gradle --no-daemon :app:assembleDebug :app:bundleDebug
 ```
 
 O workflow **Android build** gera APK e AAB na aba Actions.
 
 **Pacote dos jogos:** o workflow reconstrói e valida o pacote original a partir dos segmentos ordenados em `app/src/main/assets/bundle_parts/` antes de compilar.
+
+**Espelho do Algorithomus:** o workflow executa `tools/mirror_site.py` antes de compilar, baixando o conteúdo público do jogo para `app/src/main/assets/site/` (pasta ignorada no Git e nunca versionada).
 
 ## Ajuste do botão SAIR
 
@@ -25,6 +29,10 @@ No Frutris, o botão SAIR fica em uma pequena faixa superior, sem cobrir o paine
 ## Pontuação e salvamento automático
 
 A tela inicial exibe o placar geral, que soma os pontos de Frutris e Cobrinha separadamente. Cada incremento de pontuação é recebido pelo aplicativo uma única vez e gravado em SharedPreferences. Os jogos também mantêm recordes e configurações no armazenamento local do WebView (DOM Storage/localStorage). O backup Android está habilitado para os dados compatíveis.
+
+## Algorithomus (híbrido: local e com internet)
+
+A coleção inclui o jogo Algorithomus, do site https://algorithomus.com.br. O conteúdo público do site é espelhado durante a compilação para dentro do APK e servido localmente no domínio virtual do WebView, dentro do aplicativo: nenhum endereço abre no navegador externo e qualquer referência externa é bloqueada. O WebView continua sem acesso à rede; somente o código nativo do aplicativo conversa com o servidor original, encaminhando as chamadas `/api/` do jogo (ponte nativa injetada antes do carregamento das páginas) e buscando arquivos ausentes do espelho por proxy nativo. Sem internet, o jogo funciona com os arquivos locais; com internet, opera de forma híbrida com o servidor real. Atualizações do conteúdo espelhado chegam com novos APKs publicados pelo workflow, não pelo mecanismo OTA dos jogos.
 
 ## Atualizações seguras dos jogos
 
@@ -41,4 +49,4 @@ Todas as variantes instaláveis são assinadas com a mesma keystore permanente, 
 
 Configure o único segredo `CF_ANDROID_SIGNING_PACKAGE_B64` conforme o arquivo privado `CF-Android-Signing-One-Secret-Instructions.txt` fornecido ao mantenedor. Nunca coloque a keystore ou senhas em commits.
 
-**Migração inicial:** APKs anteriores foram gerados como debug e assinados pela keystore temporária do runner. A nova keystore estável é uma identidade de assinatura nova, portanto o Android exigirá remover a instalação anterior uma única vez. Essa remoção apaga o armazenamento privado do app. Depois da migração, futuras versões com o mesmo applicationId, versionCode crescente e a mesma keystore atualizam por cima. 
+**Migração inicial:** APKs anteriores foram gerados como debug e assinados pela keystore temporária do runner. A nova keystore estável é uma identidade de assinatura nova, portanto o Android exigirá remover a instalação anterior uma única vez. Essa remoção apaga o armazenamento privado do app. Depois da migração, futuras versões com o mesmo applicationId, versionCode crescente e a mesma keystore atualizam por cima.
