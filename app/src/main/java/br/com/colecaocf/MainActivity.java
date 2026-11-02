@@ -126,7 +126,16 @@ public final class MainActivity extends Activity {
         File frutrisIcon = new File(webRoot, "assets/img/Icones/frutris.webp");
         File cobrinhaIcon = new File(webRoot, "assets/img/Icones/cobrinha.webp");
         File exitScript = new File(webRoot, "js/exit-game.js");
-        if (marker.isFile() && f.isFile() && c.isFile() && frutrisIcon.isFile() && cobrinhaIcon.isFile() && exitScript.isFile()) return true;
+        if (marker.isFile() && f.isFile() && c.isFile() && frutrisIcon.isFile() && cobrinhaIcon.isFile() && exitScript.isFile()) {
+            try {
+                // Aplica correções novas também a instalações que já têm o pacote extraído.
+                patchGameScoreBridge(webRoot);
+                patchCobrinhaApple(webRoot);
+                return true;
+            } catch (Exception patchFailure) {
+                deleteTree(webRoot);
+            }
+        }
         deleteTree(webRoot);
         if (!webRoot.mkdirs() && !webRoot.isDirectory()) return false;
         try (InputStream in = getAssets().open("games.bundle.zip");
@@ -164,6 +173,7 @@ public final class MainActivity extends Activity {
                 while ((count = patch.read(patchBuffer)) != -1) stream.write(patchBuffer, 0, count);
             }
             patchGameScoreBridge(webRoot);
+            patchCobrinhaApple(webRoot);
             try (FileOutputStream out = new FileOutputStream(marker)) { out.write(1); }
             return true;
         } catch (Exception ex) {
@@ -184,7 +194,13 @@ public final class MainActivity extends Activity {
         long total = frutris > Long.MAX_VALUE - cobrinha ? Long.MAX_VALUE : frutris + cobrinha;
         java.text.NumberFormat fmt = java.text.NumberFormat.getIntegerInstance(new Locale("pt", "BR"));
         scoreTotalView.setText(fmt.format(total) + " PTS");
-        scoreDetailsView.setText("FRUTRIS  " + fmt.format(frutris) + "\nCOBRINHA  " + fmt.format(cobrinha));
+        int storyDay = appPrefs.getInt("algorithomus_story_day", 0);
+        String storyProgress = storyDay >= 1 && storyDay <= 7
+                ? Math.round((storyDay - 1) * 100f / 6f) + "% DA HISTÓRIA"
+                : "--% (AGUARDANDO SINCRONIZAÇÃO)";
+        scoreDetailsView.setText("FRUTRIS  " + fmt.format(frutris)
+                + "\nCOBRINHA  " + fmt.format(cobrinha)
+                + "\nALGORITHOMUS  " + storyProgress);
     }
 
     private void maybeCheckForGameUpdates() {
@@ -325,6 +341,7 @@ public final class MainActivity extends Activity {
         }
         patchFrutrisStyle(staging);
         patchGameScoreBridge(staging);
+        patchCobrinhaApple(staging);
         if (webRoot.exists() && !webRoot.renameTo(backup)) throw new java.io.IOException("Não foi possível guardar os dados anteriores.");
         if (!staging.renameTo(webRoot)) {
             if (backup.exists()) backup.renameTo(webRoot);
@@ -374,6 +391,29 @@ public final class MainActivity extends Activity {
                 "s.score = 0;",
                 "s.score = 0; if (window.CFAndroid) window.CFAndroid.reportScore('cobrinha', 0); /*CF_SCORE_RESET*/",
                 "CF_SCORE_RESET");
+    }
+
+
+    /**
+     * Divide visualmente a fruta da Cobrinha em duas metades iguais:
+     * verde à esquerda e vermelha à direita. O recorte mantém a silhueta original.
+     */
+    private void patchCobrinhaApple(File base) throws Exception {
+        patchText(new File(base, "apps/cobrinha/js/render.js"),
+                "var fruit = ctx.createLinearGradient(0, -r, 0, r);\\n" +
+                "        fruit.addColorStop(0, \"#df7863\");\\n" +
+                "        fruit.addColorStop(.5, pal[\"--food\"]);\\n" +
+                "        fruit.addColorStop(1, pal[\"--food-shade\"]);\\n" +
+                "        ctx.fillStyle = fruit;\\n" +
+                "        ctx.fill();",
+                "ctx.save();\\n" +
+                "        ctx.clip();\\n" +
+                "        ctx.fillStyle = \"#2E7D32\";\\n" +
+                "        ctx.fillRect(-r * 1.2, -r * 1.3, r * 1.2, r * 2.6);\\n" +
+                "        ctx.fillStyle = \"#E53935\";\\n" +
+                "        ctx.fillRect(0, -r * 1.3, r * 1.2, r * 2.6);\\n" +
+                "        ctx.restore(); /*CF_APPLE_HALF_SPLIT*/",
+                "CF_APPLE_HALF_SPLIT");
     }
 
     private void patchText(File file, String original, String replacement, String marker) throws Exception {
@@ -473,16 +513,17 @@ public final class MainActivity extends Activity {
         scoreCard.setOrientation(LinearLayout.VERTICAL);
         scoreCard.setPadding(dp(18), dp(12), dp(18), dp(12));
         scoreCard.setBackground(rounded(CARD, 18, Color.rgb(70, 61, 88)));
-        TextView scoreCaption = label("PLACAR GERAL", 11, MUTED, true);
-        scoreCaption.setLetterSpacing(.12f);
+        TextView scoreCaption = label("PLACAR GERAL E PROGRESSO DA HISTÓRIA", 9, MUTED, true);
+        scoreCaption.setLetterSpacing(.05f);
         scoreCard.addView(scoreCaption, new LinearLayout.LayoutParams(-1, dp(20)));
         scoreTotalView = label("0 PTS", 30, TEXT, true);
         scoreCard.addView(scoreTotalView, new LinearLayout.LayoutParams(-1, dp(40)));
         scoreDetailsView = label("", 10, MUTED, false);
-        scoreDetailsView.setMaxLines(2);
+        scoreDetailsView.setMaxLines(3);
+        scoreDetailsView.setTextSize(9);
         scoreDetailsView.setGravity(Gravity.CENTER_VERTICAL);
-        scoreCard.addView(scoreDetailsView, new LinearLayout.LayoutParams(-1, dp(36)));
-        scoreCard.setMinimumHeight(dp(120));
+        scoreCard.addView(scoreDetailsView, new LinearLayout.LayoutParams(-1, dp(48)));
+        scoreCard.setMinimumHeight(dp(132));
         LinearLayout.LayoutParams scoreParams = new LinearLayout.LayoutParams(-1, -2);
         scoreParams.bottomMargin = dp(18);
         body.addView(scoreCard, scoreParams);
@@ -733,6 +774,12 @@ public final class MainActivity extends Activity {
                     if (session != scoreSession) return;
                     if (gameOpen) { showCollection(); enterImmersive(); }
                 });
+            }
+
+            @JavascriptInterface public void reportStoryDay(int unlockedDay) {
+                // O diário original tem seis dias; dia 7 significa história concluída.
+                if (unlockedDay < 1 || unlockedDay > 7) return;
+                appPrefs.edit().putInt("algorithomus_story_day", unlockedDay).apply();
             }
             @JavascriptInterface public void reportScore(String gameId, int score) {
                 if (score < 0 || score > 1000000000) return;

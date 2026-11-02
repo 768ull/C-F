@@ -157,6 +157,23 @@ final class AlgorithmusApiBridge {
                 return CACHE_PREFIX + action + ':' + encodeURIComponent(body || '{}');
               }
 
+              function reportDiaryProgress(action, text) {
+                if ((action !== 'diary/state' && action !== 'diary/finish') ||
+                    typeof text !== 'string') return;
+                try {
+                  var payload = JSON.parse(text);
+                  if (!payload || payload.ok === false) return;
+                  var day = Number(payload.day);
+                  if (!Number.isInteger(day) || day < 1 || day > 7) return;
+                  if (window.CFAndroid &&
+                      typeof window.CFAndroid.reportStoryDay === 'function') {
+                    window.CFAndroid.reportStoryDay(day);
+                  }
+                } catch (e) {
+                  /* Uma resposta que não contenha estado válido não altera o placar. */
+                }
+              }
+
               function readCache(action, body) {
                 if (!cacheable(action)) { return null; }
                 try { return window.localStorage.getItem(cacheKey(action, body)); }
@@ -181,6 +198,7 @@ final class AlgorithmusApiBridge {
               function offlineResponse(action, body) {
                 var cached = readCache(action, body);
                 if (cached !== null) {
+                  reportDiaryProgress(action, cached);
                   return Promise.resolve(new Response(cached, {
                     status: 200,
                     statusText: 'OK',
@@ -210,7 +228,9 @@ final class AlgorithmusApiBridge {
                       // Send each online POST once. On a network failure, reuse
                       // only a previously cached read response when one exists.
                       if (!nativeFetch) {
-                        return Promise.resolve(new Response(ApiBridge.fetchApi(action, body), {
+                        var fallbackText = ApiBridge.fetchApi(action, body);
+                        reportDiaryProgress(action, fallbackText);
+                        return Promise.resolve(new Response(fallbackText, {
                           status: 200,
                           statusText: 'OK',
                           headers: { 'Content-Type': 'application/json' }
@@ -222,7 +242,8 @@ final class AlgorithmusApiBridge {
                         if (response.status >= 500 && cacheable(action)) {
                           return offlineResponse(action, body);
                         }
-                        if (!response.ok || !cacheable(action) ||
+                        var shouldReportDiary = action === 'diary/state' || action === 'diary/finish';
+                        if (!response.ok || (!cacheable(action) && !shouldReportDiary) ||
                             contentType.toLowerCase().indexOf('json') === -1) {
                           return response;
                         }
@@ -231,7 +252,8 @@ final class AlgorithmusApiBridge {
                             var payload = JSON.parse(text);
                             if (payload && payload.ok === false) return response;
                           } catch (e) { return response; }
-                          writeCache(action, body, text);
+                          if (shouldReportDiary) reportDiaryProgress(action, text);
+                          if (cacheable(action)) writeCache(action, body, text);
                           return new Response(text, {
                             status: response.status,
                             statusText: response.statusText,
