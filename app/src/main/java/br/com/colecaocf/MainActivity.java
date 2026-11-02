@@ -399,21 +399,23 @@ public final class MainActivity extends Activity {
      * verde à esquerda e vermelha à direita. O recorte mantém a silhueta original.
      */
     private void patchCobrinhaApple(File base) throws Exception {
+        String original = String.join("\n",
+                "var fruit = ctx.createLinearGradient(0, -r, 0, r);",
+                "        fruit.addColorStop(0, \"#df7863\");",
+                "        fruit.addColorStop(.5, pal[\"--food\"]);",
+                "        fruit.addColorStop(1, pal[\"--food-shade\"]);",
+                "        ctx.fillStyle = fruit;",
+                "        ctx.fill();");
+        String replacement = String.join("\n",
+                "ctx.save();",
+                "        ctx.clip();",
+                "        ctx.fillStyle = \"#2E7D32\";",
+                "        ctx.fillRect(-r * 1.2, -r * 1.3, r * 1.2, r * 2.6);",
+                "        ctx.fillStyle = \"#E53935\";",
+                "        ctx.fillRect(0, -r * 1.3, r * 1.2, r * 2.6);",
+                "        ctx.restore(); /*CF_APPLE_HALF_SPLIT*/");
         patchText(new File(base, "apps/cobrinha/js/render.js"),
-                "var fruit = ctx.createLinearGradient(0, -r, 0, r);\\n" +
-                "        fruit.addColorStop(0, \"#df7863\");\\n" +
-                "        fruit.addColorStop(.5, pal[\"--food\"]);\\n" +
-                "        fruit.addColorStop(1, pal[\"--food-shade\"]);\\n" +
-                "        ctx.fillStyle = fruit;\\n" +
-                "        ctx.fill();",
-                "ctx.save();\\n" +
-                "        ctx.clip();\\n" +
-                "        ctx.fillStyle = \"#2E7D32\";\\n" +
-                "        ctx.fillRect(-r * 1.2, -r * 1.3, r * 1.2, r * 2.6);\\n" +
-                "        ctx.fillStyle = \"#E53935\";\\n" +
-                "        ctx.fillRect(0, -r * 1.3, r * 1.2, r * 2.6);\\n" +
-                "        ctx.restore(); /*CF_APPLE_HALF_SPLIT*/",
-                "CF_APPLE_HALF_SPLIT");
+                original, replacement, "CF_APPLE_HALF_SPLIT");
     }
 
     private void patchText(File file, String original, String replacement, String marker) throws Exception {
