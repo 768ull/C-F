@@ -130,7 +130,7 @@ jobs:
 
       - name: Build APK and AAB with permanent signature
         if: env.CF_STABLE_SIGNING_AVAILABLE == 'true'
-        run: gradle --no-daemon :app:assembleDebug :app:bundleDebug
+        run: gradle --no-daemon :app:assembleRelease :app:bundleRelease
 
       - name: Build development APK when permanent signature is not configured
         if: env.CF_STABLE_SIGNING_AVAILABLE != 'true'
@@ -190,8 +190,8 @@ jobs:
         with:
           name: ${{ env.CF_ARTIFACT_NAME }}
           path: |
-            app/build/outputs/apk/debug/app-debug.apk
-            app/build/outputs/bundle/debug/app-debug.aab
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
 
       - name: Upload development APK while permanent signature is pending
@@ -208,14 +208,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="$(sed -n 's/.*versionName "\([^"]*\)".*/\1/p' app/build.gradle | head -n 1)"
-          APK="app/build/outputs/apk/debug/app-debug.apk"
           if [ "$CF_STABLE_SIGNING_AVAILABLE" = "true" ]; then
+            APK="app/build/outputs/apk/release/app-release.apk"
             TAG="v${version}"
             FILE="CF-Collection-Android-${version}.apk"
             TITLE="C-F Collection v${version} (stable signed)"
             NOTES="APK assinado com o certificado permanente C-F. Instalacao direta."
             PRE=""
           else
+            APK="app/build/outputs/apk/debug/app-debug.apk"
             TAG="v${version}-debug"
             FILE="CF-Collection-Android-${version}-debug.apk"
             TITLE="C-F Collection v${version} (development build)"
