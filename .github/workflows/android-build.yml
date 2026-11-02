@@ -60,10 +60,10 @@ jobs:
         run: |
           if [ -z "$CF_ANDROID_SIGNING_PACKAGE_B64" ]; then
             echo "CF_STABLE_SIGNING_AVAILABLE=false" >> "$GITHUB_ENV"
-            echo "::warning::Pacote de assinatura permanente ainda não cadastrado. Nenhum APK/AAB será publicado nesta execução para evitar certificado temporário incompatível."
+            echo "::warning::Pacote de assinatura permanente ainda nao cadastrado. Somente um APK de desenvolvimento (certificado temporario) sera publicado em pre-lancamento. Nenhum APK/AAB estavel sera publicado ate o segredo CF_ANDROID_SIGNING_PACKAGE_B64 ser cadastrado."
             {
               echo "### Assinatura permanente pendente"
-              echo "A compilação validará os fontes, mas não publicará APK/AAB até o segredo CF_ANDROID_SIGNING_PACKAGE_B64 ser cadastrado."
+              echo "A compilacao produzira um APK de desenvolvimento (certificado temporario), publicado como pre-lancamento com link de download. O APK/AAB estavel exige o segredo CF_ANDROID_SIGNING_PACKAGE_B64."
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -75,14 +75,14 @@ jobs:
           with zipfile.ZipFile(archive_path) as archive:
               expected = {"cf-android-signing.jks", "signing.json"}
               if set(archive.namelist()) != expected:
-                  raise SystemExit("Pacote de assinatura inválido: conteúdo inesperado.")
+                  raise SystemExit("Pacote de assinatura invalido: conteudo inesperado.")
               key = archive.read("cf-android-signing.jks")
               config = json.loads(archive.read("signing.json"))
           if not key or len(key) > 65536:
-              raise SystemExit("Keystore ausente ou inválida.")
+              raise SystemExit("Keystore ausente ou invalida.")
           required = ("storePassword", "keyAlias", "keyPassword")
           if any(not isinstance(config.get(k), str) or not config[k] or "\n" in config[k] for k in required):
-              raise SystemExit("Configuração de assinatura incompleta.")
+              raise SystemExit("Configuracao de assinatura incompleta.")
           key_path = os.path.join(target, "cf-android-signing.jks")
           with open(key_path, "wb") as output:
               output.write(key)
@@ -106,33 +106,36 @@ jobs:
           echo "Assinatura permanente validada."
           {
             echo "### Assinatura permanente validada"
-            echo "O APK/AAB será gerado com o certificado permanente C-F."
+            echo "O APK/AAB sera gerado com o certificado permanente C-F."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build APK and AAB with permanent signature
         if: env.CF_STABLE_SIGNING_AVAILABLE == 'true'
         run: gradle --no-daemon :app:assembleDebug :app:bundleDebug
 
-      - name: Validate Android sources when permanent signature is not configured
+      - name: Build development APK when permanent signature is not configured
         if: env.CF_STABLE_SIGNING_AVAILABLE != 'true'
-        run: gradle --no-daemon :app:compileDebugJavaWithJavac
+        run: gradle --no-daemon :app:assembleDebug
 
       - name: Compose artifact name from versionName
-        if: env.CF_STABLE_SIGNING_AVAILABLE == 'true'
         run: |
           version="$(sed -n 's/.*versionName "\([^"]*\)".*/\1/p' app/build.gradle | head -n 1)"
           if [ -z "$version" ]; then
-            echo "::error::versionName não encontrado em app/build.gradle."
+            echo "::error::versionName nao encontrado em app/build.gradle."
             exit 1
           fi
-          echo "CF_ARTIFACT_NAME=CF-Collection-Android-${version}-stable-signed" >> "$GITHUB_ENV"
+          if [ "$CF_STABLE_SIGNING_AVAILABLE" = "true" ]; then
+            echo "CF_ARTIFACT_NAME=CF-Collection-Android-${version}-stable-signed" >> "$GITHUB_ENV"
+          else
+            echo "CF_ARTIFACT_NAME=CF-Collection-Android-${version}-debug" >> "$GITHUB_ENV"
+          fi
 
       - name: Publish the next signed game update (when the repository secret is configured)
         env:
           CF_UPDATE_PRIVATE_KEY_PEM: ${{ secrets.CF_UPDATE_PRIVATE_KEY_PEM }}
         run: |
           if [ -z "$CF_UPDATE_PRIVATE_KEY_PEM" ]; then
-            echo "::warning::Configure o segredo CF_UPDATE_PRIVATE_KEY_PEM para assinar e publicar futuras atualizações OTA."
+            echo "::warning::Configure o segredo CF_UPDATE_PRIVATE_KEY_PEM para assinar e publicar futuras atualizacoes OTA."
             exit 0
           fi
           mkdir -p updates
@@ -145,7 +148,7 @@ jobs:
               "bundleVersion": int(os.environ["GITHUB_RUN_NUMBER"]),
               "bundleUrl": "https://raw.githubusercontent.com/768ull/C-F/main/updates/games.bundle.zip.b64",
               "sha256": hashlib.sha256(bundle).hexdigest(),
-              "description": "Atualização assinada dos jogos C-F"
+              "description": "Atualizacao assinada dos jogos C-F"
           }
           with open("updates/latest.json", "w", encoding="utf-8", newline="\n") as f:
               json.dump(manifest, f, ensure_ascii=False, separators=(",", ":"))
@@ -171,3 +174,39 @@ jobs:
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/bundle/debug/app-debug.aab
           if-no-files-found: error
+
+      - name: Upload development APK while permanent signature is pending
+        if: env.CF_STABLE_SIGNING_AVAILABLE != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CF_ARTIFACT_NAME }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Publish APK in the versions menu (permanent download link)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(sed -n 's/.*versionName "\([^"]*\)".*/\1/p' app/build.gradle | head -n 1)"
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          if [ "$CF_STABLE_SIGNING_AVAILABLE" = "true" ]; then
+            TAG="v${version}"
+            FILE="CF-Collection-Android-${version}.apk"
+            TITLE="C-F Collection v${version} (stable signed)"
+            NOTES="APK assinado com o certificado permanente C-F. Instalacao direta."
+            PRE=""
+          else
+            TAG="v${version}-debug"
+            FILE="CF-Collection-Android-${version}-debug.apk"
+            TITLE="C-F Collection v${version} (development build)"
+            NOTES="APK de desenvolvimento assinado com certificado temporario (pacote br.com.colecaocf.debug). Cada nova versao de desenvolvimento exige desinstalar a versao de desenvolvimento anterior antes de instalar esta. A versao estavel, com certificado permanente, sera publicada quando o segredo CF_ANDROID_SIGNING_PACKAGE_B64 for cadastrado no repositorio."
+            PRE="--prerelease"
+          fi
+          cp "$APK" "$FILE"
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$FILE" --clobber -R "$GITHUB_REPOSITORY"
+          else
+            # shellcheck disable=SC2086
+            gh release create "$TAG" "$FILE" --title "$TITLE" --target "$GITHUB_SHA" --notes "$NOTES" $PRE -R "$GITHUB_REPOSITORY"
+          fi
