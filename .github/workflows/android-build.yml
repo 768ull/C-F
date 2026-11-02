@@ -162,6 +162,29 @@ jobs:
         if: env.CF_STABLE_SIGNING_AVAILABLE != 'true'
         run: gradle --no-daemon :app:assembleDebug
 
+      - name: Verify APK signature, package metadata, and launcher icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+          if [ "$CF_STABLE_SIGNING_AVAILABLE" = "true" ]; then
+            APK="app/build/outputs/apk/release/app-release.apk"
+            EXPECTED_ID="br.com.colecaocf"
+          else
+            APK="app/build/outputs/apk/debug/app-debug.apk"
+            EXPECTED_ID="br.com.colecaocf.debug"
+          fi
+          test -s "$APK"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
+          BADGING="$("$BUILD_TOOLS/aapt" dump badging "$APK")"
+          printf '%s\\n' "$BADGING"
+          printf '%s\\n' "$BADGING" | grep -F "package: name='$EXPECTED_ID'"
+          printf '%s\\n' "$BADGING" | grep -E "application:.*icon="
+          printf '%s\\n' "$BADGING" | grep -F "launchable-activity:"
+          unzip -Z1 "$APK" | grep -Fx "res/mipmap-anydpi-v26/ic_launcher.xml"
+          unzip -Z1 "$APK" | grep -Fx "res/drawable/ic_launcher_foreground.xml"
+          echo "APK assinado, pacote e ícone adaptativo validados."
+
       - name: Compose artifact name from versionName
         run: |
           version="$(sed -n 's/.*versionName "\([^"]*\)".*/\1/p' app/build.gradle | head -n 1)"
