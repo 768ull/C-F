@@ -108,8 +108,8 @@ final class AlgorithmusApiBridge {
      * jogo) sejam tratadas de forma híbrida. Com internet, a chamada segue para
      * o fetch nativo do WebView, que conversa diretamente com os servidores
      * originais (mesma origem do jogo, com cookies e TLS reais). Sem internet,
-     * a ponte nativa devolve a resposta offline "sem-internet" com a mesma
-     * assinatura de Promise/Response que o jogo espera. As demais chamadas
+     * respostas de leitura já obtidas podem ser reutilizadas do cache local; ações
+     * sem cache recebem HTTP 503. As demais chamadas
      * seguem sempre para o fetch nativo.
      */
     public static final String FETCH_SHIM = """
@@ -234,6 +234,7 @@ final class AlgorithmusApiBridge {
                 }
                 if (nativeFetch) { return nativeFetch(input, init); }
                 return Promise.reject(new Error('fetch indisponivel'));
-              };            })();
+              };
+            })();
             """;
 }
