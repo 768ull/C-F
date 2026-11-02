@@ -86,14 +86,21 @@ jobs:
             git push
           fi
 
-      - name: Set up permanent Android signing key
+      - name: Load permanent Android signing key (optional until repository secret is saved)
+        id: signing
         env:
           CF_ANDROID_SIGNING_PACKAGE_B64: ${{ secrets.CF_ANDROID_SIGNING_PACKAGE_B64 }}
         run: |
           if [ -z "$CF_ANDROID_SIGNING_PACKAGE_B64" ]; then
-            echo "::error::Cadastre o segredo único CF_ANDROID_SIGNING_PACKAGE_B64 em Settings > Secrets and variables > Actions. Instruções no arquivo CF-Android-Signing-One-Secret-Instructions.txt."
-            exit 1
+            echo "CF_STABLE_SIGNING_AVAILABLE=false" >> "$GITHUB_ENV"
+            echo "::warning::Pacote de assinatura permanente ainda não cadastrado. Nenhum APK/AAB será publicado nesta execução para evitar certificado temporário incompatível."
+            {
+              echo "### Assinatura permanente pendente"
+              echo "A compilação validará os fontes, mas não publicará APK/AAB até o segredo CF_ANDROID_SIGNING_PACKAGE_B64 ser cadastrado."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
+          set -euo pipefail
           printf '%s' "$CF_ANDROID_SIGNING_PACKAGE_B64" | base64 --decode > "$RUNNER_TEMP/cf-signing-package.zip"
           python3 - "$RUNNER_TEMP/cf-signing-package.zip" "$RUNNER_TEMP" <<'PY'
           import json, os, sys, zipfile
@@ -112,25 +119,39 @@ jobs:
           key_path = os.path.join(target, "cf-android-signing.jks")
           with open(key_path, "wb") as output:
               output.write(key)
+          import subprocess
+          subprocess.run([
+              "keytool", "-list", "-keystore", key_path,
+              "-storepass", config["storePassword"],
+              "-alias", config["keyAlias"]
+          ], check=True, stdout=subprocess.DEVNULL)
           values = {
               "CF_ANDROID_KEYSTORE_PATH": key_path,
               "CF_ANDROID_KEYSTORE_PASSWORD": config["storePassword"],
               "CF_ANDROID_KEY_ALIAS": config["keyAlias"],
               "CF_ANDROID_KEY_PASSWORD": config["keyPassword"],
+              "CF_STABLE_SIGNING_AVAILABLE": "true"
           }
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
               for name, value in values.items():
                   env.write(f"{name}={value}\n")
           PY
-      - name: Verify permanent Android signing key
-        run: |
-          keytool -list -keystore "$CF_ANDROID_KEYSTORE_PATH" \
-            -storepass "$CF_ANDROID_KEYSTORE_PASSWORD" -alias "$CF_ANDROID_KEY_ALIAS" >/dev/null
+          echo "Assinatura permanente validada."
+          {
+            echo "### Assinatura permanente validada"
+            echo "O APK/AAB será gerado com o certificado permanente C-F."
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Build APK and AAB
+      - name: Build APK and AAB with permanent signature
+        if: env.CF_STABLE_SIGNING_AVAILABLE == 'true'
         run: gradle --no-daemon :app:assembleDebug :app:bundleDebug
 
-      - name: Upload Android artifacts
+      - name: Validate Android sources when permanent signature is not configured
+        if: env.CF_STABLE_SIGNING_AVAILABLE != 'true'
+        run: gradle --no-daemon :app:compileDebugJavaWithJavac
+
+      - name: Upload Android artifacts signed with the permanent key
+        if: env.CF_STABLE_SIGNING_AVAILABLE == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: CF-Collection-Android-1.1.2-stable-signed
