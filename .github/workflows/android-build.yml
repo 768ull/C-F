@@ -2,8 +2,10 @@ name: Android build
 
 on:
   workflow_dispatch:
-  push:
+  pull_request:
     branches: [ main ]
+  push:
+    branches: [ main, fix/full-simulator-hybrid ]
     paths-ignore:
       - 'updates/**'
 
@@ -61,16 +63,40 @@ jobs:
 
       - name: Validate the mirrored Algorithomus content
         run: |
-          test -f app/src/main/assets/site/index.html
-          grep -q "Algorithomus" app/src/main/assets/site/index.html
-          if grep -qiE "cf-chl|Just a moment|Attention Required" app/src/main/assets/site/index.html; then
+          SITE="app/src/main/assets/site"
+          test -s "$SITE/index.html"
+          test -s "$SITE/media-manifest.json"
+          grep -q "Algorithomus" "$SITE/index.html"
+          if grep -qiE "cf-chl|Just a moment|Attention Required" "$SITE/index.html"; then
             echo "::error::O espelho do Algorithomus recebeu uma pagina de bloqueio (Cloudflare) em vez do jogo real. Rode o workflow novamente."
             exit 1
           fi
-          test -n "$(find app/src/main/assets/site -name '*.js' -print -quit)"
-          if [ ! -f app/src/main/assets/site/media-manifest.json ]; then
-            echo "::warning::media-manifest.json ausente do espelho; o modo offline do jogo pode ficar incompleto."
-          fi
+          for page in \
+            apps/mensagens/index.html apps/y/index.html apps/telefone/index.html \
+            apps/galeria/index.html apps/tetris/index.html apps/cobrinha/index.html \
+            apps/calculadora/index.html apps/configuracoes/index.html \
+            apps/sem-nome/index.html apps/sem-nome/rabiscos/index.html; do
+            test -s "$SITE/$page" || { echo "::error::Pagina obrigatoria ausente: $page"; exit 1; }
+          done
+          python3 - <<'PY'
+          import json, pathlib, sys
+          root = pathlib.Path("app/src/main/assets/site")
+          manifest = json.loads((root / "media-manifest.json").read_text(encoding="utf-8"))
+          missing = []
+          for asset in manifest.get("assets", []):
+              path = asset.get("url")
+              if isinstance(path, str) and path:
+                  local = root / path.split("?", 1)[0].lstrip("/")
+                  if not local.is_file():
+                      missing.append(path)
+          if missing:
+              print("::error::Midias primarias ausentes do espelho:")
+              for path in missing:
+                  print(" - " + path)
+              sys.exit(1)
+          print("Manifesto e mídias primárias validados.")
+          PY
+          test -n "$(find "$SITE" -name '*.js' -print -quit)"
 
       - name: Load permanent Android signing key (optional until repository secret is saved)
         id: signing
@@ -130,7 +156,7 @@ jobs:
 
       - name: Build APK and AAB with permanent signature
         if: env.CF_STABLE_SIGNING_AVAILABLE == 'true'
-        run: gradle --no-daemon :app:assembleDebug :app:bundleDebug
+        run: gradle --no-daemon :app:assembleRelease :app:bundleRelease
 
       - name: Build development APK when permanent signature is not configured
         if: env.CF_STABLE_SIGNING_AVAILABLE != 'true'
@@ -150,6 +176,7 @@ jobs:
           fi
 
       - name: Publish the next signed game update (when the repository secret is configured)
+        if: github.ref == 'refs/heads/main'
         env:
           CF_UPDATE_PRIVATE_KEY_PEM: ${{ secrets.CF_UPDATE_PRIVATE_KEY_PEM }}
         run: |
@@ -190,8 +217,8 @@ jobs:
         with:
           name: ${{ env.CF_ARTIFACT_NAME }}
           path: |
-            app/build/outputs/apk/debug/app-debug.apk
-            app/build/outputs/bundle/debug/app-debug.aab
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
 
       - name: Upload development APK while permanent signature is pending
@@ -208,14 +235,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="$(sed -n 's/.*versionName "\([^"]*\)".*/\1/p' app/build.gradle | head -n 1)"
-          APK="app/build/outputs/apk/debug/app-debug.apk"
           if [ "$CF_STABLE_SIGNING_AVAILABLE" = "true" ]; then
+            APK="app/build/outputs/apk/release/app-release.apk"
             TAG="v${version}"
             FILE="CF-Collection-Android-${version}.apk"
             TITLE="C-F Collection v${version} (stable signed)"
             NOTES="APK assinado com o certificado permanente C-F. Instalacao direta."
             PRE=""
           else
+            APK="app/build/outputs/apk/debug/app-debug.apk"
             TAG="v${version}-debug"
             FILE="CF-Collection-Android-${version}-debug.apk"
             TITLE="C-F Collection v${version} (development build)"

@@ -494,7 +494,7 @@ public final class MainActivity extends Activity {
         body.addView(gameCard("Cobrinha", "Jogo da cobrinha · deslize para direcionar", "cobrinha.webp", "cobrinha", 0));
         View siteGap = new View(this);
         body.addView(siteGap, new LinearLayout.LayoutParams(1, dp(14)));
-        body.addView(gameCard("Algorithomus", "ARG interativo · celular encontrado", null, "algorithomus", R.drawable.ic_algorithomus));
+        body.addView(gameCard("Simulador completo", "Algorithomus · telefone interativo com todos os aplicativos", null, "algorithomus", R.drawable.ic_algorithomus));
 
         TextView updateButton = label("VERIFICAR ATUALIZAÇÕES", 12, TEXT, true);
         updateButton.setGravity(Gravity.CENTER);
@@ -566,11 +566,33 @@ public final class MainActivity extends Activity {
     }
 
     private boolean algorithmusMirrorAvailable() {
-        try (InputStream in = getAssets().open("site/index.html")) {
-            return in.read() != -1;
-        } catch (Exception e) {
-            return false;
+        // Do not open a simulator shell unless its core pages and app entry points
+        // were embedded by the build-time mirror. This catches partial bundles.
+        String[] requiredAssets = {
+                "site/index.html",
+                "site/media-manifest.json",
+                "site/js/main.js",
+                "site/js/core/boot-loader.js",
+                "site/css/system.css",
+                "site/apps/mensagens/index.html",
+                "site/apps/y/index.html",
+                "site/apps/telefone/index.html",
+                "site/apps/galeria/index.html",
+                "site/apps/tetris/index.html",
+                "site/apps/cobrinha/index.html",
+                "site/apps/calculadora/index.html",
+                "site/apps/configuracoes/index.html",
+                "site/apps/sem-nome/index.html",
+                "site/apps/sem-nome/rabiscos/index.html"
+        };
+        for (String path : requiredAssets) {
+            try (InputStream in = getAssets().open(path)) {
+                if (in.read() == -1) return false;
+            } catch (Exception missing) {
+                return false;
+            }
         }
+        return true;
     }
 
     private boolean algorithmusOpen() {
@@ -630,7 +652,7 @@ public final class MainActivity extends Activity {
     /** Resposta JSON de servidor indisponível, usada no modo offline. */
     private WebResourceResponse apiOfflineJson() {
         byte[] body = AlgorithmusNet.errorJson("sem-internet").getBytes(StandardCharsets.UTF_8);
-        return new WebResourceResponse("application/json", "UTF-8", 200, "OK",
+        return new WebResourceResponse("application/json", "UTF-8", 503, "Service Unavailable",
                 Collections.emptyMap(), new ByteArrayInputStream(body));
     }
 

@@ -12,14 +12,14 @@ Projeto Android Gradle organizado diretamente na raiz do repositório.
 Com JDK 17, Android SDK API 36 e Gradle 8.13:
 ```bash
 python3 tools/mirror_site.py
-gradle --no-daemon :app:assembleDebug :app:bundleDebug
+gradle --no-daemon :app:assembleDebug
 ```
 
-O workflow **Android build** gera APK e AAB na aba Actions.
+Para gerar a versão instalável estável, configure a keystore permanente nos mesmos parâmetros de ambiente usados pelo workflow e execute `:app:assembleRelease :app:bundleRelease`. O workflow **Android build** gera APK Release e AAB quando o segredo permanente está configurado; sem ele, publica apenas um APK Debug de desenvolvimento.
 
-**Pacote dos jogos:** o workflow reconstrói e valida o pacote original a partir dos segmentos ordenados em `app/src/main/assets/bundle_parts/` antes de compilar.
+**Pacote dos jogos independentes:** o workflow reconstrói e valida o pacote original Frutris/Cobrinha a partir dos segmentos ordenados em `app/src/main/assets/bundle_parts/` antes de compilar.
 
-**Espelho do Algorithomus:** o workflow executa `tools/mirror_site.py` antes de compilar, baixando o conteúdo público do jogo para `app/src/main/assets/site/` (pasta ignorada no Git e nunca versionada).
+**Simulador completo:** a terceira opção da coleção abre o telefone interativo Algorithomus, com Mensagens, Galeria, Telefone, Diário, Calculadora, Configurações, Tetris, Cobrinha e os demais aplicativos internos. O espelho de compilação copia as páginas e mídias primárias do manifesto para `app/src/main/assets/site/` (pasta ignorada no Git). A compilação falha se faltar uma página central ou uma mídia primária declarada pelo manifesto, evitando APKs com simulador parcialmente empacotado.
 
 ## Ajuste do botão SAIR
 
@@ -30,9 +30,13 @@ No Frutris, o botão SAIR fica em uma pequena faixa superior, sem cobrir o paine
 
 A tela inicial exibe o placar geral, que soma os pontos de Frutris e Cobrinha separadamente. Cada incremento de pontuação é recebido pelo aplicativo uma única vez e gravado em SharedPreferences. Os jogos também mantêm recordes e configurações no armazenamento local do WebView (DOM Storage/localStorage). O backup Android está habilitado para os dados compatíveis.
 
-## Algorithomus (híbrido: local e com internet)
+## Simulador Algorithomus (híbrido: local + online)
 
-A coleção inclui o jogo Algorithomus, do site https://algorithomus.com.br. Dentro do aplicativo, o jogo abre no próprio endereço real do jogo (`https://algorithomus.com.br/`), no WebView do C-F, de forma híbrida. Com internet, o conteúdo do jogo e as chamadas `/api/` vão diretamente aos servidores originais, com TLS e cookies reais, exatamente como na versão para navegador; somente o domínio `algorithomus.com.br` é autorizado a falar com a rede e qualquer outra referência externa é bloqueada, sem abrir nada no navegador externo. Sem internet, as mesmas requisições são atendidas pelo espelho do site embutido no APK (gerado em compilação por `tools/mirror_site.py`, nunca versionado no Git) e as chamadas de servidor recebem a resposta offline do próprio jogo, que continua utilizável localmente. Atualizações do conteúdo espelhado chegam com novos APKs publicados pelo workflow, não pelo mecanismo OTA dos jogos.
+A coleção mantém três opções separadas: Frutris, Cobrinha e **Simulador completo** (o telefone interativo Algorithomus). O simulador roda no WebView nativo, sem abrir navegador externo. HTML, CSS, JavaScript, imagens, áudios e vídeos são servidos primeiro do espelho incorporado no APK, então a interface e os recursos estáticos disponíveis continuam abrindo sem internet. Com uma conexão validada, as chamadas dinâmicas `/api/` seguem para `https://algorithomus.com.br` por HTTPS, no mesmo contexto de origem e com cookies reais. Somente o domínio original do jogo é autorizado para tráfego do simulador; demais destinos externos continuam bloqueados.
+
+Quando uma conexão cai, as chamadas de API recebem HTTP 503 em vez de um falso HTTP 200. O WebView mantém em cache local algumas respostas de leitura obtidas anteriormente (lista/conteúdo de Mensagens e estado/conteúdo de dias do Diário) para permitir consulta offline do que já foi carregado. Ações que dependem do servidor — como enviar escolhas, validar códigos, concluir etapas e carregar conteúdo protegido nunca aberto — continuam exigindo internet. Isso evita inventar progresso ou conceder desbloqueios que o servidor não confirmou. Na primeira abertura, conecte-se à internet para carregar os dados dinâmicos que poderão ser consultados offline depois.
+
+O espelho é baixado em cada compilação por `tools/mirror_site.py`, validado contra as páginas dos aplicativos e as mídias primárias do `media-manifest.json`, e incorporado ao APK em `app/src/main/assets/site/` (pasta ignorada no Git). Atualizações dessas páginas e mídias chegam com novos APKs; o mecanismo OTA assinado continua reservado aos dois jogos independentes.
 
 ## Atualizações seguras dos jogos
 
@@ -45,8 +49,8 @@ Para habilitar a assinatura automática das próximas versões, adicione o segre
 
 ## Assinatura permanente do APK (obrigatória)
 
-Todas as variantes instaláveis são assinadas com a mesma keystore permanente, fornecida ao workflow por GitHub Actions Secrets. O workflow interrompe a compilação se a chave estável não estiver configurada; não publica APKs assinados com chaves debug efêmeras.
+Quando a keystore permanente está configurada, o workflow assina as variantes Release com a identidade estável do C-F e publica APK e AAB. Enquanto o segredo não estiver configurado, o workflow ainda gera apenas um APK Debug de desenvolvimento, identificado com o sufixo ".debug" e certificado temporário; ele não substitui uma instalação estável existente.
 
 Configure o único segredo `CF_ANDROID_SIGNING_PACKAGE_B64` conforme o arquivo privado `CF-Android-Signing-One-Secret-Instructions.txt` fornecido ao mantenedor. Nunca coloque a keystore ou senhas em commits.
 
-**Migração inicial:** APKs anteriores foram gerados como debug e assinados pela keystore temporária do runner. A nova keystore estável é uma identidade de assinatura nova, portanto o Android exigirá remover a instalação anterior uma única vez. Essa remoção apaga o armazenamento privado do app. Depois da migração, futuras versões com o mesmo applicationId, versionCode crescente e a mesma keystore atualizam por cima.
+**Migração inicial:** APKs anteriores de desenvolvimento foram assinados pela keystore temporária do runner. A nova keystore estável é uma identidade de assinatura nova, portanto o Android exigirá remover a instalação anterior de desenvolvimento uma única vez. Essa remoção apaga o armazenamento privado do app. Depois da migração, futuras versões Release com o mesmo applicationId, versionCode crescente e a mesma keystore atualizam por cima.

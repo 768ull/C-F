@@ -108,8 +108,8 @@ final class AlgorithmusApiBridge {
      * jogo) sejam tratadas de forma híbrida. Com internet, a chamada segue para
      * o fetch nativo do WebView, que conversa diretamente com os servidores
      * originais (mesma origem do jogo, com cookies e TLS reais). Sem internet,
-     * a ponte nativa devolve a resposta offline "sem-internet" com a mesma
-     * assinatura de Promise/Response que o jogo espera. As demais chamadas
+     * respostas de leitura já obtidas podem ser reutilizadas do cache local; ações
+     * sem cache recebem HTTP 503. As demais chamadas
      * seguem sempre para o fetch nativo.
      */
     public static final String FETCH_SHIM = """
@@ -121,6 +121,8 @@ final class AlgorithmusApiBridge {
               var ORIGIN = 'https://algorithomus.com.br';
               var API_BASE = ORIGIN + '/api/';
               var ACTION_OK = /^[A-Za-z0-9/_-]+$/;
+              var CACHE_PREFIX = '__cf_hybrid_api_v1:';
+              var MAX_CACHE_CHARS = 400000;
 
               function apiAction(url) {
                 if (typeof url !== 'string') { return null; }
@@ -137,6 +139,60 @@ final class AlgorithmusApiBridge {
                 return action;
               }
 
+              // Cache only read-only story data. Mutations and protected actions
+              // must still be confirmed by the server when the device is online.
+              function cacheable(action) {
+                return action === 'social-feed' ||
+                       action === 'social-state' ||
+                       action === 'messages/list' ||
+                       action === 'messages/open' ||
+                       action === 'messages/final' ||
+                       action === 'diary/state' ||
+                       action === 'diary/open';
+              }
+
+              function cacheKey(action, body) {
+                // These read endpoints use tiny stable bodies (empty, contact id or day).
+                // Encoding the body avoids hash collisions between different contacts.
+                return CACHE_PREFIX + action + ':' + encodeURIComponent(body || '{}');
+              }
+
+              function readCache(action, body) {
+                if (!cacheable(action)) { return null; }
+                try { return window.localStorage.getItem(cacheKey(action, body)); }
+                catch (e) { return null; }
+              }
+
+              function writeCache(action, body, text) {
+                if (!cacheable(action) || typeof text !== 'string' ||
+                    text.length === 0 || text.length > MAX_CACHE_CHARS) return;
+                try { window.localStorage.setItem(cacheKey(action, body), text); }
+                catch (e) { /* armazenamento cheio: mantém a resposta online */ }
+              }
+
+              function unavailableResponse(text) {
+                return Promise.resolve(new Response(text, {
+                  status: 503,
+                  statusText: 'Service Unavailable',
+                  headers: { 'Content-Type': 'application/json' }
+                }));
+              }
+
+              function offlineResponse(action, body) {
+                var cached = readCache(action, body);
+                if (cached !== null) {
+                  return Promise.resolve(new Response(cached, {
+                    status: 200,
+                    statusText: 'OK',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'X-CF-Offline-Cache': 'hit'
+                    }
+                  }));
+                }
+                return unavailableResponse('{"ok":false,"error":"sem-internet"}');
+              }
+
               window.fetch = function (input, init) {
                 var url = null;
                 var body = '{}';
@@ -145,22 +201,46 @@ final class AlgorithmusApiBridge {
                     url = input;
                   } else if (input && typeof input.url === 'string') {
                     url = input.url;
-                    if (input.body) { body = String(input.body); }
+                    if (input.body && typeof input.body === 'string') { body = input.body; }
                   }
-                  if (init && init.body) { body = String(init.body); }
+                  if (init && typeof init.body === 'string') { body = init.body; }
                   var action = apiAction(url);
                   if (action !== null) {
-                    if (ApiBridge.isOnline() && nativeFetch) {
-                      return nativeFetch(input, init);
+                    if (ApiBridge.isOnline()) {
+                      // Send each online POST once. On a network failure, reuse
+                      // only a previously cached read response when one exists.
+                      if (!nativeFetch) {
+                        return Promise.resolve(new Response(ApiBridge.fetchApi(action, body), {
+                          status: 200,
+                          statusText: 'OK',
+                          headers: { 'Content-Type': 'application/json' }
+                        }));
+                      }
+                      return nativeFetch(input, init).then(function (response) {
+                        var contentType = response.headers ?
+                            (response.headers.get('Content-Type') || '') : '';
+                        if (response.status >= 500 && cacheable(action)) {
+                          return offlineResponse(action, body);
+                        }
+                        if (!response.ok || !cacheable(action) ||
+                            contentType.toLowerCase().indexOf('json') === -1) {
+                          return response;
+                        }
+                        return response.clone().text().then(function (text) {
+                          try {
+                            var payload = JSON.parse(text);
+                            if (payload && payload.ok === false) return response;
+                          } catch (e) { return response; }
+                          writeCache(action, body, text);
+                          return new Response(text, {
+                            status: response.status,
+                            statusText: response.statusText,
+                            headers: response.headers
+                          });
+                        }).catch(function () { return response; });
+                      }).catch(function () { return offlineResponse(action, body); });
                     }
-                    var text = ApiBridge.fetchApi(action, body);
-                    return Promise.resolve(
-                      new Response(text, {
-                        status: 200,
-                        statusText: 'OK',
-                        headers: { 'Content-Type': 'application/json' }
-                      })
-                    );
+                    return offlineResponse(action, body);
                   }
                 } catch (e) {
                   /* segue para o fetch nativo */
