@@ -145,6 +145,12 @@ def normalize_ref(ref, page_path):
     normalized = posixpath.normpath("/" + decoded.lstrip("/"))
     if normalized == "/.." or normalized.startswith("/../"):
         return None
+
+    # The mirror crawls static resources, not navigation routes or API actions.
+    # This avoids requesting paths such as /power or strings extracted from code.
+    basename = normalized.rsplit("/", 1)[-1]
+    if not normalized.endswith("/") and ("." not in basename or basename.startswith(".")):
+        return None
     return normalized
 
 
@@ -164,20 +170,46 @@ def save(path, data):
         fh.write(data)
 
 
+def js_document_base(script_path):
+    """Resolve JS string URLs against the document that loads the script.
+
+    A string assigned to Image.src/fetch/audio.src is resolved against the
+    document base URL, not the JavaScript file's /js/ directory. A nested app
+    page such as /apps/sem-nome/rabiscos/rabiscos.js keeps its own directory.
+    """
+    path = script_path.split("?", 1)[0]
+    parts = [part for part in path.split("/") if part]
+    if parts and parts[0] == "apps":
+        if "js" in parts:
+            parts = parts[:parts.index("js")]
+        else:
+            parts = parts[:-1]
+        return "/" + "/".join(parts) + ("/" if parts else "")
+    return "/"
+
+
 def extract_refs(data, page_path):
-    """Extrai referências de um arquivo de texto (HTML/CSS/JS) baixado."""
+    """Extract static references using HTML/CSS/JS browser base-URL rules."""
     try:
         text = data.decode("utf-8", errors="replace")
     except Exception:
         return []
-    refs = []
-    for regex in (ATTR_RE, CSS_URL_RE, FILE_RE):
-        refs.extend(regex.findall(text))
+
+    script_base = (js_document_base(page_path)
+                   if page_path.lower().endswith((".js", ".mjs"))
+                   else page_path)
+    candidates = []
+    candidates.extend((ref, page_path) for ref in ATTR_RE.findall(text))
+    candidates.extend((ref, page_path) for ref in CSS_URL_RE.findall(text))
+    candidates.extend((ref, script_base) for ref in FILE_RE.findall(text))
+
     out = []
-    for r in refs:
-        p = normalize_ref(r, page_path)
-        if p:
-            out.append(p)
+    seen = set()
+    for ref, base in candidates:
+        path = normalize_ref(ref, base)
+        if path and path not in seen:
+            seen.add(path)
+            out.append(path)
     return out
 
 
