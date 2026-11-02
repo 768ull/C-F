@@ -89,6 +89,8 @@ jobs:
       - name: Set up permanent Android signing key
         env:
           CF_ANDROID_KEYSTORE_B64: ${{ secrets.CF_ANDROID_KEYSTORE_B64 }}
+          CF_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.CF_ANDROID_KEYSTORE_PASSWORD }}
+          CF_ANDROID_KEY_ALIAS: ${{ secrets.CF_ANDROID_KEY_ALIAS }}
         run: |
           if [ -z "$CF_ANDROID_KEYSTORE_B64" ]; then
             echo "::error::Configure CF_ANDROID_KEYSTORE_B64, CF_ANDROID_KEYSTORE_PASSWORD, CF_ANDROID_KEY_ALIAS e CF_ANDROID_KEY_PASSWORD em Settings > Secrets and variables > Actions. APK debug sem chave estável não será gerado."
