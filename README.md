@@ -16,3 +16,7 @@ gradle --no-daemon :app:assembleDebug :app:bundleDebug
 O workflow **Android build** gera APK e AAB na aba Actions.
 
 **Estado dos jogos:** a estrutura do aplicativo está publicada, mas o pacote `games.bundle.zip` ainda não está no repositório. Até ele ser incluído em `app/src/main/assets/`, o APK não conterá os jogos jogáveis.
+
+## Ajuste do botão SAIR
+
+No Frutris, o botão SAIR fica em uma pequena faixa superior, sem cobrir o painel de próximas peças. O ajuste é aplicado durante a extração local no Android e não altera o motor, os controles ou os gráficos do jogo. A Cobrinha mantém o botão integrado ao cabeçalho.
