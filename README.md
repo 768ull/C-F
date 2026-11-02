@@ -15,7 +15,7 @@ gradle --no-daemon :app:assembleDebug :app:bundleDebug
 
 O workflow **Android build** gera APK e AAB na aba Actions.
 
-**Estado dos jogos:** a estrutura do aplicativo está publicada, mas o pacote `games.bundle.zip` ainda não está no repositório. Até ele ser incluído em `app/src/main/assets/`, o APK não conterá os jogos jogáveis.
+**Pacote dos jogos:** o workflow reconstrói e valida o pacote original a partir dos segmentos ordenados em `app/src/main/assets/bundle_parts/` antes de compilar.
 
 ## Ajuste do botão SAIR
 
