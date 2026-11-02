@@ -1,1 +1,1 @@
-O Gradle monta games.bundle.zip a partir de .github/game-bundle/games.bundle.zip.b64 antes de compilar o aplicativo.
+O pacote de recursos dos jogos (games.bundle.zip) ainda precisa ser publicado nesta pasta para que Frutris e Cobrinha sejam incluídos no aplicativo. O build do Android não deve procurar arquivos de recursos dentro de .github.

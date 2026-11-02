@@ -31,17 +31,3 @@ android {
 dependencies {
     implementation "androidx.webkit:webkit:1.18.0"
 }
-
-def bundleFile = file("src/main/assets/games.bundle.zip")
-def bundleB64 = rootProject.file(".github/game-bundle/games.bundle.zip.b64")
-tasks.register("prepareGameBundle") {
-    inputs.file(bundleB64)
-    outputs.file(bundleFile)
-    doLast {
-        if (bundleFile.isFile()) return
-        if (!bundleB64.isFile()) throw new GradleException("Missing .github/game-bundle/games.bundle.zip.b64")
-        bundleFile.parentFile.mkdirs()
-        bundleFile.bytes = java.util.Base64.getMimeDecoder().decode(bundleB64.getText("UTF-8"))
-    }
-}
-tasks.named("preBuild").configure { dependsOn("prepareGameBundle") }
