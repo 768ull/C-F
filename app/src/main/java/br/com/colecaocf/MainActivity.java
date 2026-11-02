@@ -240,7 +240,7 @@ public final class MainActivity extends Activity {
     private void updateStatus(TextView statusView, String message, boolean silent, boolean error) {
         runOnUiThread(() -> {
             if (statusView != null) statusView.setText(message);
-            if (!silent || error) {
+            if (!silent) {
                 Toast.makeText(this, message, Toast.LENGTH_LONG).show();
             }
         });
@@ -569,9 +569,9 @@ public final class MainActivity extends Activity {
 
     private void openGame(String id) {
         if (!assetsReady) { showCollection(); return; }
-        gameOpen = true;
         activeGameId = id;
         lastReportedScore = 0;
+        gameOpen = true;
         root.removeAllViews();
         webView = new WebView(this);
         webView.setBackgroundColor(Color.BLACK);
