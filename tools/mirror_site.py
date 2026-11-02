@@ -259,29 +259,32 @@ def main():
             path = entry
             url = BASE + urllib.parse.quote(path)
 
-        if path in downloaded:
+        # Directory URLs are saved as their index.html file so required-file
+        # checks and relative-reference crawling use one canonical path.
+        local_path = path + "index.html" if path.endswith("/") else path
+        if local_path in downloaded:
             continue
 
         data = fetch(url)
         if data is None and "?" not in url:
             data = fetch(url + "?v=1")
         if data is None:
-            failed.append(path)
-            downloaded[path] = None
+            failed.append(local_path)
+            downloaded[local_path] = None
             continue
 
-        downloaded[path] = data
-        log("OK %s (%d bytes)" % (path, len(data)))
+        downloaded[local_path] = data
+        log("OK %s (%d bytes)" % (local_path, len(data)))
 
-        if path == "/media-manifest.json":
+        if local_path == "/media-manifest.json":
             for ref in parse_manifest(data):
                 norm = normalize_ref(ref, "/")
                 if norm and norm not in queued:
                     queued.add(norm)
                     queue.append(norm)
 
-        if path.lower().endswith(TEXT_EXT):
-            for ref in extract_refs(data, path):
+        if local_path.lower().endswith(TEXT_EXT):
+            for ref in extract_refs(data, local_path):
                 if ref not in queued:
                     queued.add(ref)
                     queue.append(ref)
