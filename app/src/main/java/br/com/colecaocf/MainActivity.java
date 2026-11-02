@@ -70,7 +70,6 @@ public final class MainActivity extends Activity {
     private SharedPreferences appPrefs;
     private TextView scoreTotalView;
     private TextView scoreDetailsView;
-    private View nativeExitButton;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -115,7 +114,7 @@ public final class MainActivity extends Activity {
     }
 
     private boolean installGameFiles() {
-        File marker = new File(webRoot, ".bundle-v6");
+        File marker = new File(webRoot, ".bundle-v7");
         File f = new File(webRoot, "apps/frutris/index.html");
         File c = new File(webRoot, "apps/cobrinha/index.html");
         File frutrisIcon = new File(webRoot, "assets/img/Icones/frutris.webp");
@@ -179,7 +178,7 @@ public final class MainActivity extends Activity {
         long total = frutris > Long.MAX_VALUE - cobrinha ? Long.MAX_VALUE : frutris + cobrinha;
         java.text.NumberFormat fmt = java.text.NumberFormat.getIntegerInstance(new Locale("pt", "BR"));
         scoreTotalView.setText(fmt.format(total) + " PTS");
-        scoreDetailsView.setText("FRUTRIS  " + fmt.format(frutris) + "     COBRINHA  " + fmt.format(cobrinha));
+        scoreDetailsView.setText("FRUTRIS  " + fmt.format(frutris) + "\nCOBRINHA  " + fmt.format(cobrinha));
     }
 
     private void maybeCheckForGameUpdates() {
@@ -432,7 +431,6 @@ public final class MainActivity extends Activity {
             webView = null;
         }
         root.removeAllViews();
-        nativeExitButton = null;
         root.setBackgroundColor(BG);
 
         ScrollView scroll = new ScrollView(this);
@@ -471,9 +469,12 @@ public final class MainActivity extends Activity {
         scoreCard.addView(scoreCaption, new LinearLayout.LayoutParams(-1, dp(20)));
         scoreTotalView = label("0 PTS", 30, TEXT, true);
         scoreCard.addView(scoreTotalView, new LinearLayout.LayoutParams(-1, dp(40)));
-        scoreDetailsView = label("", 11, MUTED, false);
-        scoreCard.addView(scoreDetailsView, new LinearLayout.LayoutParams(-1, dp(20)));
-        LinearLayout.LayoutParams scoreParams = new LinearLayout.LayoutParams(-1, dp(94));
+        scoreDetailsView = label("", 10, MUTED, false);
+        scoreDetailsView.setMaxLines(2);
+        scoreDetailsView.setGravity(Gravity.CENTER_VERTICAL);
+        scoreCard.addView(scoreDetailsView, new LinearLayout.LayoutParams(-1, dp(36)));
+        scoreCard.setMinimumHeight(dp(120));
+        LinearLayout.LayoutParams scoreParams = new LinearLayout.LayoutParams(-1, -2);
         scoreParams.bottomMargin = dp(18);
         body.addView(scoreCard, scoreParams);
         refreshScoreBoard();
@@ -543,25 +544,6 @@ public final class MainActivity extends Activity {
         return card;
     }
 
-    private TextView createNativeExitButton() {
-        TextView exit = label("SAIR", 11, TEXT, true);
-        exit.setGravity(Gravity.CENTER);
-        exit.setLetterSpacing(.08f);
-        exit.setContentDescription("Sair do Frutris e voltar à coleção");
-        exit.setBackground(new RippleDrawable(
-                ColorStateList.valueOf(Color.argb(48, 255, 255, 255)),
-                rounded(Color.rgb(25, 26, 36), 6, Color.rgb(91, 78, 116)),
-                null));
-        exit.setClickable(true);
-        exit.setFocusable(true);
-        exit.setOnClickListener(v -> {
-            if (gameOpen) {
-                showCollection();
-                enterImmersive();
-            }
-        });
-        return exit;
-    }
     private WebResourceResponse blocked() {
         return new WebResourceResponse("text/plain", "UTF-8", 403, "Offline",
                 Collections.emptyMap(), new ByteArrayInputStream(new byte[0]));
@@ -617,7 +599,9 @@ public final class MainActivity extends Activity {
             @Override public void onPageFinished(WebView v, String url) {
                 super.onPageFinished(v, url);
                 if ("frutris".equals(id)) {
-                    v.evaluateJavascript("(function(){var b=document.getElementById('exitGameBtn');if(b)b.style.display='none';})();", null);
+                    v.evaluateJavascript(
+                            "(function(){var b=document.getElementById('exitGameBtn');var h=document.querySelector('.game-hud');if(b&&h&&b.parentNode!==h)h.appendChild(b);})();",
+                            null);
                 }
             }
             @Override public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
@@ -633,14 +617,6 @@ public final class MainActivity extends Activity {
             }
         });
         root.addView(webView, new FrameLayout.LayoutParams(-1, -1));
-        if ("frutris".equals(id)) {
-            nativeExitButton = createNativeExitButton();
-            FrameLayout.LayoutParams exitParams = new FrameLayout.LayoutParams(
-                    dp(56), dp(34), Gravity.TOP | Gravity.END);
-            exitParams.topMargin = dp(8);
-            exitParams.rightMargin = dp(10);
-            root.addView(nativeExitButton, exitParams);
-        }
         webView.loadUrl("https://" + HOST + "/local/apps/" + id + "/index.html");
         enterImmersive();
     }
