@@ -137,6 +137,14 @@ final class AlgorithmusApiBridge {
                 return action;
               }
 
+              function unavailableResponse(text) {
+                return Promise.resolve(new Response(text, {
+                  status: 503,
+                  statusText: 'Service Unavailable',
+                  headers: { 'Content-Type': 'application/json' }
+                }));
+              }
+
               window.fetch = function (input, init) {
                 var url = null;
                 var body = '{}';
@@ -145,22 +153,21 @@ final class AlgorithmusApiBridge {
                     url = input;
                   } else if (input && typeof input.url === 'string') {
                     url = input.url;
-                    if (input.body) { body = String(input.body); }
+                    if (input.body && typeof input.body === 'string') { body = input.body; }
                   }
-                  if (init && init.body) { body = String(init.body); }
+                  if (init && typeof init.body === 'string') { body = init.body; }
                   var action = apiAction(url);
                   if (action !== null) {
                     if (ApiBridge.isOnline() && nativeFetch) {
-                      return nativeFetch(input, init);
+                      // The online POST is sent exactly once to the original server.
+                      // If connectivity drops mid-request, expose a real network error
+                      // to the app instead of pretending the API returned HTTP 200.
+                      return nativeFetch(input, init).catch(function () {
+                        return unavailableResponse('{"ok":false,"error":"sem-internet"}');
+                      });
                     }
                     var text = ApiBridge.fetchApi(action, body);
-                    return Promise.resolve(
-                      new Response(text, {
-                        status: 200,
-                        statusText: 'OK',
-                        headers: { 'Content-Type': 'application/json' }
-                      })
-                    );
+                    return unavailableResponse(text);
                   }
                 } catch (e) {
                   /* segue para o fetch nativo */
