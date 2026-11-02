@@ -7,11 +7,11 @@ android {
     compileSdk 36
 
     defaultConfig {
-        applicationId "br.com.colecaocf"
+        applicationId "br.com.cfa"
         minSdk 24
         targetSdk 35
-        versionCode 13
-        versionName "1.2.3"
+        versionCode 14
+        versionName "1.2.4"
     }
 
     signingConfigs {

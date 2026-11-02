@@ -450,11 +450,11 @@ public final class MainActivity extends Activity {
         body.setPadding(dp(24), dp(30), dp(24), dp(28));
         scroll.addView(body);
 
-        TextView eyebrow = label("COLEÇÃO DE JOGOS", 11, MUTED, true);
+        TextView eyebrow = label("COLEÇÃO DE JOGOS E APLICATIVOS", 11, MUTED, true);
         eyebrow.setLetterSpacing(.16f);
         body.addView(eyebrow, new LinearLayout.LayoutParams(-1, dp(28)));
 
-        TextView title = label("C-F", 42, TEXT, true);
+        TextView title = label("C-F-A", 42, TEXT, true);
         title.setLetterSpacing(-.04f);
         body.addView(title, new LinearLayout.LayoutParams(-1, dp(60)));
 
@@ -656,6 +656,34 @@ public final class MainActivity extends Activity {
                 Collections.emptyMap(), new ByteArrayInputStream(body));
     }
 
+    /**
+     * Botão nativo sempre visível durante o Algorithomus, independente da
+     * tela ou do aplicativo interno aberto no simulador.
+     */
+    private void addAlgorithomusExitButton() {
+        TextView exitButton = label("SAIR", 12, Color.WHITE, true);
+        exitButton.setGravity(Gravity.CENTER);
+        exitButton.setLetterSpacing(0.08f);
+        exitButton.setBackground(new RippleDrawable(
+                ColorStateList.valueOf(Color.argb(70, 255, 255, 255)),
+                rounded(Color.rgb(170, 38, 38), 22, Color.rgb(220, 92, 92)),
+                null));
+        exitButton.setClickable(true);
+        exitButton.setFocusable(true);
+        exitButton.setElevation(dp(8));
+        exitButton.setContentDescription("Sair do Algorithomus e voltar à coleção C-F-A");
+        exitButton.setOnClickListener(v -> {
+            showCollection();
+            enterImmersive();
+        });
+
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                dp(84), dp(42), Gravity.TOP | Gravity.END);
+        params.topMargin = dp(14);
+        params.rightMargin = dp(14);
+        root.addView(exitButton, params);
+    }
+
     private void openGame(String id) {
         boolean siteGame = "algorithomus".equals(id);
         if (siteGame) {
@@ -747,6 +775,7 @@ public final class MainActivity extends Activity {
             }
         });
         root.addView(webView, new FrameLayout.LayoutParams(-1, -1));
+        if (siteGame) addAlgorithomusExitButton();
         webView.loadUrl(siteGame ? AlgorithmusNet.REAL_ORIGIN + "/index.html" : "https://" + HOST + "/local/apps/" + id + "/index.html");
         enterImmersive();
     }

@@ -1,4 +1,4 @@
-# C-F — Coleção de Jogos Android
+# C-F-A — Coleção de Jogos e Aplicativos para Android
 
 Projeto Android Gradle organizado diretamente na raiz do repositório.
 
@@ -49,7 +49,7 @@ Para habilitar a assinatura automática das próximas versões, adicione o segre
 
 ## Assinatura permanente do APK (obrigatória)
 
-Quando a keystore permanente está configurada, o workflow assina as variantes Release com a identidade estável do C-F e publica APK e AAB. Enquanto o segredo não estiver configurado, o workflow ainda gera apenas um APK Debug de desenvolvimento, identificado com o sufixo ".debug" e certificado temporário; ele não substitui uma instalação estável existente.
+Quando a keystore permanente está configurada, o workflow assina as variantes Release com a identidade estável do C-F-A e publica APK e AAB. Enquanto o segredo não estiver configurado, o workflow ainda gera apenas um APK Debug de desenvolvimento, identificado com o sufixo ".debug" e certificado temporário; ele não substitui uma instalação estável existente.
 
 Configure o único segredo `CF_ANDROID_SIGNING_PACKAGE_B64` conforme o arquivo privado `CF-Android-Signing-One-Secret-Instructions.txt` fornecido ao mantenedor. Nunca coloque a keystore ou senhas em commits.
 
