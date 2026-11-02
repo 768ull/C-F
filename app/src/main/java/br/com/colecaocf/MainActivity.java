@@ -570,18 +570,6 @@ public final class MainActivity extends Activity {
                 "Confira eventos e ingressos",
                 "https://mundotorajo.com.br/ingressos/"));
 
-        TextView updateButton = label("VERIFICAR ATUALIZAÇÕES", 12, TEXT, true);
-        updateButton.setGravity(Gravity.CENTER);
-        updateButton.setBackground(new RippleDrawable(
-                ColorStateList.valueOf(Color.argb(35, 255, 255, 255)),
-                rounded(CARD, 14, Color.rgb(91, 78, 116)), null));
-        updateButton.setClickable(true);
-        updateButton.setFocusable(true);
-        updateButton.setOnClickListener(v -> checkForGameUpdates(updateButton, false));
-        LinearLayout.LayoutParams updateParams = new LinearLayout.LayoutParams(-1, dp(48));
-        updateParams.topMargin = dp(16);
-        body.addView(updateButton, updateParams);
-
         TextView footer = label(assetsReady ? "TOQUE EM UM JOGO PARA ABRIR" : "NÃO FOI POSSÍVEL PREPARAR OS JOGOS",
                 10, assetsReady ? MUTED : Color.rgb(255, 138, 128), true);
         footer.setGravity(Gravity.CENTER);
