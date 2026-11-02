@@ -10,11 +10,19 @@ android {
         applicationId "br.com.cfa"
         minSdk 24
         targetSdk 35
-        versionCode 19
-        versionName "1.2.9"
+        versionCode 20
+        versionName "1.2.10"
     }
 
     signingConfigs {
+        // Public, development-only key: stabilizes upgrades for br.com.cfa.debug.
+        // Production releases continue to use the private GitHub signing secret.
+        development {
+            storeFile file("cfa-development.jks")
+            storePassword "CFA-Public-Debug-2026"
+            keyAlias "cfa-development"
+            keyPassword "CFA-Public-Debug-2026"
+        }
         if (System.getenv("CF_ANDROID_KEYSTORE_PATH")) {
             stable {
                 storeFile file(System.getenv("CF_ANDROID_KEYSTORE_PATH"))
@@ -31,6 +39,8 @@ android {
             versionNameSuffix "-debug"
             if (System.getenv("CF_ANDROID_KEYSTORE_PATH")) {
                 signingConfig signingConfigs.stable
+            } else {
+                signingConfig signingConfigs.development
             }
         }
         release {

@@ -178,7 +178,11 @@ jobs:
             EXPECTED_ID="br.com.cfa.debug"
           fi
           test -s "$APK"
-          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
+          SIGNATURE_INFO="$("$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK")"
+          printf '%s\\n' "$SIGNATURE_INFO"
+          if [ "$CF_STABLE_SIGNING_AVAILABLE" != "true" ]; then
+            printf '%s\\n' "$SIGNATURE_INFO" | grep -F "a2d3deec433e0563e2180aa9364b8560018cfc6884749e8fbe33d025ab44d28b"
+          fi
           BADGING="$("$BUILD_TOOLS/aapt" dump badging "$APK")"
           printf '%s\\n' "$BADGING"
           printf '%s\\n' "$BADGING" | grep -F "package: name='$EXPECTED_ID'"
@@ -275,7 +279,7 @@ jobs:
             TAG="v${version}-debug"
             FILE="CFA-Android-${version}-debug.apk"
             TITLE="C-F-A v${version} (development build)"
-            NOTES="APK de desenvolvimento assinado com certificado temporario (pacote br.com.cfa.debug). Cada nova versao de desenvolvimento exige desinstalar a versao de desenvolvimento anterior antes de instalar esta. A versao estavel, com certificado permanente, sera publicada quando o segredo CF_ANDROID_SIGNING_PACKAGE_B64 for cadastrado no repositorio."
+            NOTES="APK de desenvolvimento assinado com chave persistente C-F-A (pacote br.com.cfa.debug). Para migrar de instalacoes 1.2.9 e anteriores, remova a versao antiga uma unica vez porque elas usavam certificados temporarios diferentes. A partir da 1.2.10, as proximas versoes podem ser instaladas por cima sem desinstalar. A versao estavel, com certificado permanente separado, sera publicada quando o segredo CF_ANDROID_SIGNING_PACKAGE_B64 for cadastrado."
             PRE="--prerelease"
           fi
           cp "$APK" "$FILE"
