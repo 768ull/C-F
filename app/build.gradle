@@ -10,16 +10,30 @@ android {
         applicationId "br.com.colecaocf"
         minSdk 24
         targetSdk 35
-        versionCode 7
-        versionName "1.1.1"
+        versionCode 8
+        versionName "1.1.2"
+    }
+
+    signingConfigs {
+        stable {
+            def keyPath = System.getenv("CF_ANDROID_KEYSTORE_PATH")
+            storeFile file(keyPath ?: "missing-cf-signing-key.jks")
+            storePassword System.getenv("CF_ANDROID_KEYSTORE_PASSWORD") ?: ""
+            keyAlias System.getenv("CF_ANDROID_KEY_ALIAS") ?: "cf-release"
+            keyPassword System.getenv("CF_ANDROID_KEY_PASSWORD") ?: ""
+        }
     }
 
     buildTypes {
         debug {
             applicationIdSuffix ".debug"
             versionNameSuffix "-debug"
+            signingConfig signingConfigs.stable
         }
-        release { minifyEnabled false }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.stable
+        }
     }
 
     compileOptions {
