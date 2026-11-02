@@ -11,7 +11,8 @@ Estratégia:
      (áudios do Diário, áudios da Maya, frames dos rabiscos, vídeos e áudios do sistema).
   3. Extrai, por expressão regular, todas as referências de HTML/CSS/JS
      (src, href, url(...), caminhos citados em strings) e baixa o que for da mesma origem.
-  4. Falhas individuais NÃO derrubam o build; a ausência do index.html sim.
+  4. Valida todas as páginas principais e as mídias primárias do manifesto; falhas
+     em fallbacks de codec são avisadas, mas não impedem o build.
 
 Usa apenas a biblioteca padrão (urllib), para rodar no GitHub Actions sem dependências.
 """
