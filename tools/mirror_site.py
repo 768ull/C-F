@@ -18,7 +18,9 @@ Usa apenas a biblioteca padrão (urllib), para rodar no GitHub Actions sem depen
 
 import json
 import os
+import posixpath
 import re
+import shutil
 import sys
 import urllib.parse
 import urllib.request
@@ -42,6 +44,19 @@ APP_PAGES = [
     "/apps/configuracoes/?v=10",
     "/apps/sem-nome/?v=5",
     "/apps/sem-nome/rabiscos/index.html?v=2",
+]
+ 
+REQUIRED_APP_PAGES = [
+    "/apps/mensagens/index.html",
+    "/apps/y/index.html",
+    "/apps/telefone/index.html",
+    "/apps/galeria/index.html",
+    "/apps/tetris/index.html",
+    "/apps/cobrinha/index.html",
+    "/apps/calculadora/index.html",
+    "/apps/configuracoes/index.html",
+    "/apps/sem-nome/index.html",
+    "/apps/sem-nome/rabiscos/index.html",
 ]
 
 # Lista fixa de mídias do Diário/Mensagens/sistema citadas no core/boot-loader.
@@ -106,33 +121,30 @@ def fetch(url, retries=1):
 
 
 def normalize_ref(ref, page_path):
-    """Converte uma referência encontrada em caminho absoluto do site, ou None."""
-    if not ref:
+    """Resolve a reference and keep only files hosted by the original game."""
+    if not isinstance(ref, str):
         return None
     ref = ref.strip()
     if not ref or ref.startswith(("data:", "blob:", "javascript:", "mailto:",
                                   "tel:", "#")):
         return None
-    if ref.startswith(("http://", "https://")):
-        parsed = urllib.parse.urlparse(ref)
-        if parsed.netloc != "algorithomus.com.br":
-            return None  # externo (Cloudflare/YouTube): não espelha
-        ref = parsed.path
-        if not ref:
-            return None
-    ref = ref.split("#", 1)[0]
-    if not ref:
+
+    # urljoin also handles root-relative, relative, absolute and protocol-relative
+    # references. Removing query/fragment is safe because the local mirror stores
+    # one canonical copy of each path; the query is only a cache-buster.
+    base_path = page_path.split("?", 1)[0]
+    absolute = urllib.parse.urljoin(BASE + base_path, ref)
+    parsed = urllib.parse.urlparse(absolute)
+    if parsed.scheme not in ("http", "https"):
         return None
-    # caminhos relativos usados pelo cenário do jogo (pasta de avatares)
-    if ref.startswith("pfp/"):
-        return "/apps/mensagens/" + ref
-    # resolve relativo ao diretório da página que citou
-    base_dir = page_path if page_path.endswith("/") else page_path.rsplit("/", 1)[0] + "/"
-    joined = urllib.parse.urljoin(base_dir, ref)
-    path = urllib.parse.unquote(joined)
-    if not path.startswith("/"):
-        path = "/" + path
-    return path
+    if (parsed.hostname or "").lower() != "algorithomus.com.br":
+        return None
+
+    decoded = urllib.parse.unquote(parsed.path or "/")
+    normalized = posixpath.normpath("/" + decoded.lstrip("/"))
+    if normalized == "/.." or normalized.startswith("/../"):
+        return None
+    return normalized
 
 
 def disk_path(path):
@@ -169,19 +181,22 @@ def extract_refs(data, page_path):
 
 
 def parse_manifest(data):
-    """Percorre o manifesto e devolve todos os caminhos citados (url e fallbackUrls)."""
+    """Return every same-origin media URL, including singular fallbackUrl."""
     found = []
 
     def walk(obj):
         if isinstance(obj, dict):
-            url = obj.get("url")
-            if isinstance(url, str):
-                found.append(url)
-            for fb in (obj.get("fallbackUrls") or []):
-                if isinstance(fb, str):
-                    found.append(fb)
+            for key in ("url", "fallbackUrl"):
+                value = obj.get(key)
+                if isinstance(value, str) and value:
+                    found.append(value)
+            fallbacks = obj.get("fallbackUrls")
+            if isinstance(fallbacks, list):
+                found.extend(value for value in fallbacks
+                             if isinstance(value, str) and value)
             for value in obj.values():
-                walk(value)
+                if isinstance(value, (dict, list)):
+                    walk(value)
         elif isinstance(obj, list):
             for value in obj:
                 walk(value)
@@ -193,15 +208,47 @@ def parse_manifest(data):
     return found
 
 
+def manifest_asset_paths(data):
+    """Get canonical local paths for primary and fallback media assets."""
+    try:
+        manifest = json.loads(data.decode("utf-8", errors="replace"))
+    except Exception as exc:
+        raise ValueError("Manifesto de mídia inválido: %s" % exc)
+    assets = manifest.get("assets") if isinstance(manifest, dict) else None
+    if not isinstance(assets, list):
+        raise ValueError("Manifesto de mídia sem a lista 'assets'.")
+    primary, fallback = [], []
+    for asset in assets:
+        if not isinstance(asset, dict):
+            continue
+        primary_url = asset.get("url")
+        if isinstance(primary_url, str) and primary_url:
+            path = normalize_ref(primary_url, "/")
+            if path:
+                primary.append(path)
+        for key in ("fallbackUrl", "fallbackUrls"):
+            value = asset.get(key)
+            values = value if isinstance(value, list) else [value]
+            for candidate in values:
+                if isinstance(candidate, str) and candidate:
+                    path = normalize_ref(candidate, "/")
+                    if path:
+                        fallback.append(path)
+    return sorted(set(primary)), sorted(set(fallback))
+
+
 def main():
+    # Never mix a new download with stale files from an earlier local build.
+    if os.path.isdir(OUT):
+        shutil.rmtree(OUT)
     os.makedirs(OUT, exist_ok=True)
-    downloaded = {}   # caminho -> bytes
+
+    downloaded = {}   # canonical path -> bytes (or None after a failed request)
     failed = []
     queue = ["/index.html", MANIFEST_URL] + APP_PAGES + DIARY_SEQUENCE
     queued = set()
     for item in queue:
         queued.add(item.split("?", 1)[0])
-    queued.discard(None)
 
     while queue and len(downloaded) < MAX_FILES:
         entry = queue.pop(0)
@@ -216,10 +263,8 @@ def main():
             continue
 
         data = fetch(url)
-        if data is None:
-            # GET sem query (alguns servidores exigem o ?v= do cache busting)
-            if "?" not in url:
-                data = fetch(url + "?v=1")
+        if data is None and "?" not in url:
+            data = fetch(url + "?v=1")
         if data is None:
             failed.append(path)
             downloaded[path] = None
@@ -228,21 +273,17 @@ def main():
         downloaded[path] = data
         log("OK %s (%d bytes)" % (path, len(data)))
 
-        # o manifesto aponta para as mídias oficiais
         if path == "/media-manifest.json":
             for ref in parse_manifest(data):
                 norm = normalize_ref(ref, "/")
-                if norm and norm.split("?", 1)[0] not in queued:
-                    queued.add(norm.split("?", 1)[0])
+                if norm and norm not in queued:
+                    queued.add(norm)
                     queue.append(norm)
 
-        # extrai referências de arquivos de texto
-        lower = path.lower()
-        if lower.endswith(TEXT_EXT):
+        if path.lower().endswith(TEXT_EXT):
             for ref in extract_refs(data, path):
-                key = ref.split("?", 1)[0]
-                if key not in queued:
-                    queued.add(key)
+                if ref not in queued:
+                    queued.add(ref)
                     queue.append(ref)
 
     ok = 0
@@ -252,13 +293,48 @@ def main():
         save(path, data)
         ok += 1
 
-    log("Baixados: %d | Falhas: %d | Total: %d" % (ok, len(failed), len(downloaded)))
-    for p in failed:
-        log("FALHOU: " + p)
+    log("Baixados: %d | Falhas: %d | Total: %d" %
+        (ok, len(failed), len(downloaded)))
+    for path in failed:
+        log("FALHOU: " + path)
 
-    if not os.path.exists(os.path.join(OUT, "index.html")):
+    # A build must never publish a simulator shell with missing core apps or
+    # manifest-declared primary media. Optional codec fallbacks are warnings.
+    required = ["/index.html", "/media-manifest.json"] + REQUIRED_APP_PAGES
+    missing = [path for path in required if downloaded.get(path) is None]
+    manifest_bytes = downloaded.get("/media-manifest.json")
+    if manifest_bytes:
+        try:
+            primary, fallbacks = manifest_asset_paths(manifest_bytes)
+            missing.extend(path for path in primary if downloaded.get(path) is None)
+            missing_fallbacks = [path for path in fallbacks
+                                 if downloaded.get(path) is None]
+        except ValueError as exc:
+            log("ERRO FATAL: %s" % exc)
+            return 1
+    else:
+        missing_fallbacks = []
+
+    missing = sorted(set(missing))
+    if missing:
+        log("ERRO FATAL: espelho incompleto; arquivos essenciais ausentes:")
+        for path in missing:
+            log("AUSENTE: " + path)
+        return 1
+
+    for path in sorted(set(missing_fallbacks)):
+        log("AVISO: fallback de mídia indisponível: " + path)
+
+    if queue:
+        log("ERRO FATAL: limite de %d arquivos atingido com %d itens ainda na fila." %
+            (MAX_FILES, len(queue)))
+        return 1
+
+    if not os.path.isfile(os.path.join(OUT, "index.html")):
         log("ERRO FATAL: index.html não foi espelhado; abortando o build.")
         return 1
+
+    log("Espelho completo: páginas principais e todas as mídias primárias validadas.")
     return 0
 
 
