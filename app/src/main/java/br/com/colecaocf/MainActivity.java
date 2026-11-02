@@ -450,11 +450,11 @@ public final class MainActivity extends Activity {
         body.setPadding(dp(24), dp(30), dp(24), dp(28));
         scroll.addView(body);
 
-        TextView eyebrow = label("COLEÇÃO DE JOGOS", 11, MUTED, true);
+        TextView eyebrow = label("COLEÇÃO DE JOGOS E APLICATIVOS", 11, MUTED, true);
         eyebrow.setLetterSpacing(.16f);
         body.addView(eyebrow, new LinearLayout.LayoutParams(-1, dp(28)));
 
-        TextView title = label("C-F", 42, TEXT, true);
+        TextView title = label("C-F-A", 42, TEXT, true);
         title.setLetterSpacing(-.04f);
         body.addView(title, new LinearLayout.LayoutParams(-1, dp(60)));
 
@@ -671,7 +671,7 @@ public final class MainActivity extends Activity {
         exitButton.setClickable(true);
         exitButton.setFocusable(true);
         exitButton.setElevation(dp(8));
-        exitButton.setContentDescription("Sair do Algorithomus e voltar à coleção C-F");
+        exitButton.setContentDescription("Sair do Algorithomus e voltar à coleção C-F-A");
         exitButton.setOnClickListener(v -> {
             showCollection();
             enterImmersive();
