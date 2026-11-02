@@ -4,9 +4,11 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
+    paths-ignore:
+      - 'updates/**'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -40,12 +42,50 @@ jobs:
           test -f app/src/main/java/br/com/colecaocf/MainActivity.java
           test -f app/src/main/assets/bundle_parts/00.b64
           test -f app/src/main/assets/frutris-exit-fix.css
+          test -f updates/latest.json
+          test -f updates/latest.json.sig.b64
+          test -f updates/games.bundle.zip.b64
 
       - name: Reconstruct and validate the two original games
         run: |
           gradle --no-daemon :app:prepareGameBundle
           unzip -t app/src/main/assets/games.bundle.zip
           unzip -l app/src/main/assets/games.bundle.zip | grep -E 'apps/(frutris|cobrinha)/index.html|assets/img/Icones/(frutris|cobrinha).webp|js/exit-game.js'
+
+      - name: Publish the next signed game update (when the repository secret is configured)
+        env:
+          CF_UPDATE_PRIVATE_KEY_PEM: ${{ secrets.CF_UPDATE_PRIVATE_KEY_PEM }}
+        run: |
+          if [ -z "$CF_UPDATE_PRIVATE_KEY_PEM" ]; then
+            echo "::warning::Configure o segredo CF_UPDATE_PRIVATE_KEY_PEM para assinar e publicar futuras atualizações OTA."
+            exit 0
+          fi
+          mkdir -p updates
+          base64 -w0 app/src/main/assets/games.bundle.zip > updates/games.bundle.zip.b64
+          python3 - <<'PY'
+          import hashlib, json, os
+          bundle = open("app/src/main/assets/games.bundle.zip", "rb").read()
+          manifest = {
+              "schema": 1,
+              "bundleVersion": int(os.environ["GITHUB_RUN_NUMBER"]),
+              "bundleUrl": "https://raw.githubusercontent.com/768ull/C-F/main/updates/games.bundle.zip.b64",
+              "sha256": hashlib.sha256(bundle).hexdigest(),
+              "description": "Atualização assinada dos jogos C-F"
+          }
+          with open("updates/latest.json", "w", encoding="utf-8", newline="\n") as f:
+              json.dump(manifest, f, ensure_ascii=False, separators=(",", ":"))
+              f.write("\n")
+          PY
+          printf '%s' "$CF_UPDATE_PRIVATE_KEY_PEM" > "$RUNNER_TEMP/cf-update-private.pem"
+          openssl dgst -sha256 -sign "$RUNNER_TEMP/cf-update-private.pem" -out "$RUNNER_TEMP/latest.sig" updates/latest.json
+          base64 -w0 "$RUNNER_TEMP/latest.sig" > updates/latest.json.sig.b64
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add updates/latest.json updates/latest.json.sig.b64 updates/games.bundle.zip.b64
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish signed C-F game update"
+            git push
+          fi
 
       - name: Build APK and AAB
         run: gradle --no-daemon :app:assembleDebug :app:bundleDebug
