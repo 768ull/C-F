@@ -2,6 +2,8 @@ package br.com.colecaocf;
 
 import android.app.Activity;
 import android.content.res.ColorStateList;
+import android.content.SharedPreferences;
+import android.util.Base64;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -26,14 +28,22 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.webkit.WebViewAssetLoader;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.FileInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.Collections;
+import java.util.Locale;
+import java.net.URL;
+import java.security.MessageDigest;
+import javax.net.ssl.HttpsURLConnection;
+import org.json.JSONObject;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -43,17 +53,31 @@ public final class MainActivity extends Activity {
     private static final int TEXT = Color.rgb(246, 246, 248);
     private static final int MUTED = Color.rgb(157, 160, 169);
     private static final String HOST = "appassets.androidplatform.net";
+    private static final String UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/768ull/C-F/main/updates/latest.json";
+    private static final String UPDATE_SIGNATURE_URL = "https://raw.githubusercontent.com/768ull/C-F/main/updates/latest.json.sig.b64";
+    private static final String UPDATE_BUNDLE_URL = "https://raw.githubusercontent.com/768ull/C-F/main/updates/games.bundle.zip.b64";
+    private static final String PREFS_NAME = "cf-persistent-data";
+    private static final int INITIAL_BUNDLE_VERSION = 1;
 
     private FrameLayout root;
     private WebView webView;
     private WebViewAssetLoader assetLoader;
     private File webRoot;
-    private boolean gameOpen;
+    private volatile boolean gameOpen;
+    private volatile String activeGameId;
+    private int lastReportedScore;
     private boolean assetsReady;
+    private SharedPreferences appPrefs;
+    private TextView scoreTotalView;
+    private TextView scoreDetailsView;
     private View nativeExitButton;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        appPrefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        if (!appPrefs.contains("bundle_version")) {
+            appPrefs.edit().putInt("bundle_version", INITIAL_BUNDLE_VERSION).apply();
+        }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         root = new FrameLayout(this);
         root.setBackgroundColor(BG);
@@ -66,6 +90,7 @@ public final class MainActivity extends Activity {
                 .build();
         showCollection();
         enterImmersive();
+        maybeCheckForGameUpdates();
     }
 
     private void enterImmersive() {
@@ -90,7 +115,7 @@ public final class MainActivity extends Activity {
     }
 
     private boolean installGameFiles() {
-        File marker = new File(webRoot, ".bundle-v5");
+        File marker = new File(webRoot, ".bundle-v6");
         File f = new File(webRoot, "apps/frutris/index.html");
         File c = new File(webRoot, "apps/cobrinha/index.html");
         File frutrisIcon = new File(webRoot, "assets/img/Icones/frutris.webp");
@@ -133,11 +158,237 @@ public final class MainActivity extends Activity {
                 int count;
                 while ((count = patch.read(patchBuffer)) != -1) stream.write(patchBuffer, 0, count);
             }
+            patchGameScoreBridge(webRoot);
             try (FileOutputStream out = new FileOutputStream(marker)) { out.write(1); }
             return true;
         } catch (Exception ex) {
             deleteTree(webRoot);
             return false;
+        }
+    }
+
+
+    private long pointsFor(String gameId) {
+        return Math.max(0L, appPrefs.getLong(gameId + "_points", 0L));
+    }
+
+    private void refreshScoreBoard() {
+        if (scoreTotalView == null || scoreDetailsView == null) return;
+        long frutris = pointsFor("frutris");
+        long cobrinha = pointsFor("cobrinha");
+        long total = frutris > Long.MAX_VALUE - cobrinha ? Long.MAX_VALUE : frutris + cobrinha;
+        java.text.NumberFormat fmt = java.text.NumberFormat.getIntegerInstance(new Locale("pt", "BR"));
+        scoreTotalView.setText(fmt.format(total) + " PTS");
+        scoreDetailsView.setText("FRUTRIS  " + fmt.format(frutris) + "     COBRINHA  " + fmt.format(cobrinha));
+    }
+
+    private void maybeCheckForGameUpdates() {
+        long last = appPrefs.getLong("last_update_check", 0L);
+        if (System.currentTimeMillis() - last >= 24L * 60L * 60L * 1000L) {
+            checkForGameUpdates(null, true);
+        }
+    }
+
+    private void checkForGameUpdates(TextView statusView, boolean silent) {
+        if (statusView != null) statusView.setText("VERIFICANDO ATUALIZAÇÕES...");
+        new Thread(() -> {
+            try {
+                byte[] manifestBytes = readHttps(UPDATE_MANIFEST_URL, 32768);
+                byte[] signatureText = readHttps(UPDATE_SIGNATURE_URL, 8192);
+                byte[] signature = Base64.decode(new String(signatureText, "UTF-8").trim(), Base64.DEFAULT);
+                if (!UpdateSignatureVerifier.verify(manifestBytes, signature)) {
+                    throw new SecurityException("A assinatura da atualização não é válida.");
+                }
+                JSONObject manifest = new JSONObject(new String(manifestBytes, "UTF-8"));
+                if (manifest.getInt("schema") != 1) throw new SecurityException("Formato de atualização desconhecido.");
+                if (!UPDATE_BUNDLE_URL.equals(manifest.getString("bundleUrl"))) {
+                    throw new SecurityException("O endereço do pacote não está autorizado.");
+                }
+                int remoteVersion = manifest.getInt("bundleVersion");
+                int localVersion = appPrefs.getInt("bundle_version", INITIAL_BUNDLE_VERSION);
+                if (remoteVersion <= localVersion) {
+                    appPrefs.edit().putLong("last_update_check", System.currentTimeMillis()).apply();
+                    updateStatus(statusView, "OS JOGOS JÁ ESTÃO ATUALIZADOS", silent, false);
+                    return;
+                }
+                byte[] encodedBundle = readHttps(UPDATE_BUNDLE_URL, 2 * 1024 * 1024);
+                byte[] bundle = Base64.decode(new String(encodedBundle, "UTF-8").trim(), Base64.DEFAULT);
+                String actualHash = sha256(bundle);
+                if (!actualHash.equalsIgnoreCase(manifest.getString("sha256"))) {
+                    throw new SecurityException("O pacote baixado não passou na conferência SHA-256.");
+                }
+                installVerifiedBundle(bundle);
+                appPrefs.edit()
+                        .putInt("bundle_version", remoteVersion)
+                        .putLong("last_update_check", System.currentTimeMillis())
+                        .apply();
+                runOnUiThread(() -> {
+                    showCollection();
+                    enterImmersive();
+                    Toast.makeText(this, "Jogos atualizados com segurança.", Toast.LENGTH_LONG).show();
+                });
+            } catch (Exception error) {
+                appPrefs.edit().putLong("last_update_check", System.currentTimeMillis()).apply();
+                String message = error instanceof SecurityException
+                        ? "ATUALIZAÇÃO RECUSADA: VERIFICAÇÃO DE SEGURANÇA"
+                        : "NÃO FOI POSSÍVEL VERIFICAR ATUALIZAÇÕES";
+                updateStatus(statusView, message, silent, true);
+            }
+        }, "CF-Game-Updater").start();
+    }
+
+    private void updateStatus(TextView statusView, String message, boolean silent, boolean error) {
+        runOnUiThread(() -> {
+            if (statusView != null) statusView.setText(message);
+            if (!silent || error) {
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private byte[] readHttps(String address, int maxBytes) throws Exception {
+        URL url = new URL(address);
+        if (!"https".equalsIgnoreCase(url.getProtocol())
+                || !"raw.githubusercontent.com".equalsIgnoreCase(url.getHost())) {
+            throw new SecurityException("Servidor de atualização não autorizado.");
+        }
+        HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
+        connection.setConnectTimeout(10000);
+        connection.setReadTimeout(20000);
+        connection.setInstanceFollowRedirects(false);
+        connection.setRequestProperty("User-Agent", "CF-Android-Updater/1");
+        try {
+            if (connection.getResponseCode() != HttpsURLConnection.HTTP_OK) {
+                throw new java.io.IOException("Servidor de atualização retornou HTTP " + connection.getResponseCode());
+            }
+            try (InputStream input = connection.getInputStream();
+                 ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+                byte[] buffer = new byte[8192];
+                int count;
+                while ((count = input.read(buffer)) != -1) {
+                    if (output.size() + count > maxBytes) throw new SecurityException("Arquivo de atualização excede o limite.");
+                    output.write(buffer, 0, count);
+                }
+                return output.toByteArray();
+            }
+        } finally {
+            connection.disconnect();
+        }
+    }
+
+    private String sha256(byte[] data) throws Exception {
+        byte[] digest = MessageDigest.getInstance("SHA-256").digest(data);
+        StringBuilder out = new StringBuilder();
+        for (byte value : digest) out.append(String.format(Locale.US, "%02x", value & 0xff));
+        return out.toString();
+    }
+
+    private void installVerifiedBundle(byte[] archive) throws Exception {
+        File staging = new File(getFilesDir(), "web-games-staging");
+        File backup = new File(getFilesDir(), "web-games-backup");
+        deleteTree(staging);
+        deleteTree(backup);
+        if (!staging.mkdirs()) throw new java.io.IOException("Não foi possível criar a pasta temporária.");
+        String rootPath = staging.getCanonicalPath() + File.separator;
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archive))) {
+            byte[] buffer = new byte[8192];
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                File output = new File(staging, entry.getName());
+                if (!output.getCanonicalPath().startsWith(rootPath)) throw new SecurityException("Entrada ZIP inválida.");
+                if (entry.isDirectory()) {
+                    if (!output.mkdirs() && !output.isDirectory()) throw new java.io.IOException("Não foi possível criar pasta.");
+                } else {
+                    File parent = output.getParentFile();
+                    if (parent != null && !parent.isDirectory() && !parent.mkdirs()) throw new java.io.IOException("Não foi possível criar pasta.");
+                    try (FileOutputStream file = new FileOutputStream(output)) {
+                        int count;
+                        while ((count = zip.read(buffer)) != -1) file.write(buffer, 0, count);
+                    }
+                }
+                zip.closeEntry();
+            }
+        }
+        if (!new File(staging, "apps/frutris/index.html").isFile()
+                || !new File(staging, "apps/cobrinha/index.html").isFile()
+                || !new File(staging, "assets/img/Icones/frutris.webp").isFile()
+                || !new File(staging, "assets/img/Icones/cobrinha.webp").isFile()
+                || !new File(staging, "js/exit-game.js").isFile()) {
+            throw new SecurityException("O pacote assinado não contém os dois jogos completos.");
+        }
+        patchFrutrisStyle(staging);
+        patchGameScoreBridge(staging);
+        if (webRoot.exists() && !webRoot.renameTo(backup)) throw new java.io.IOException("Não foi possível guardar os dados anteriores.");
+        if (!staging.renameTo(webRoot)) {
+            if (backup.exists()) backup.renameTo(webRoot);
+            throw new java.io.IOException("Não foi possível instalar o pacote novo.");
+        }
+        deleteTree(backup);
+        assetsReady = true;
+    }
+
+    private void patchFrutrisStyle(File base) throws Exception {
+        File css = new File(base, "apps/frutris/css/components.css");
+        if (!css.isFile()) throw new java.io.IOException("CSS do Frutris ausente.");
+        String marker = "/* C-F Android: safe exit spacing */";
+        String current = readUtf8(css);
+        if (current.contains(marker)) return;
+        try (InputStream patch = getAssets().open("frutris-exit-fix.css");
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[2048];
+            int count;
+            while ((count = patch.read(buffer)) != -1) output.write(buffer, 0, count);
+            try (FileOutputStream file = new FileOutputStream(css, true)) {
+                file.write(("\n" + marker + "\n").getBytes("UTF-8"));
+                file.write(output.toByteArray());
+            }
+        }
+    }
+
+    private void patchGameScoreBridge(File base) throws Exception {
+        patchText(new File(base, "apps/frutris/js/engine.js"),
+                "state.score += T.TSPIN_SCORE;",
+                "state.score += T.TSPIN_SCORE; if (window.CFAndroid) window.CFAndroid.reportScore('frutris', state.score);",
+                "CFAndroid.reportScore('frutris'");
+        patchText(new File(base, "apps/frutris/js/engine.js"),
+                "state.score += baseScore;",
+                "state.score += baseScore; if (window.CFAndroid) window.CFAndroid.reportScore('frutris', state.score);",
+                "CFAndroid.reportScore('frutris'");
+        patchText(new File(base, "apps/frutris/js/state.js"),
+                "Object.assign(T.state, T.createInitialState());",
+                "Object.assign(T.state, T.createInitialState()); if (window.CFAndroid) window.CFAndroid.reportScore('frutris', 0);",
+                "CFAndroid.reportScore('frutris'");
+        patchText(new File(base, "apps/cobrinha/js/engine.js"),
+                "s.score += C.SCORE.perFood;",
+                "s.score += C.SCORE.perFood; if (window.CFAndroid) window.CFAndroid.reportScore('cobrinha', s.score);",
+                "CFAndroid.reportScore('cobrinha'");
+        patchText(new File(base, "apps/cobrinha/js/state.js"),
+                "s.score = 0;",
+                "s.score = 0; if (window.CFAndroid) window.CFAndroid.reportScore('cobrinha', 0);",
+                "CFAndroid.reportScore('cobrinha'");
+    }
+
+    private void patchText(File file, String original, String replacement, String marker) throws Exception {
+        if (!file.isFile()) throw new java.io.IOException("Arquivo de jogo não encontrado: " + file.getName());
+        String source = readUtf8(file);
+        if (source.contains(marker)) return;
+        if (!source.contains(original)) throw new java.io.IOException("Ponto de integração não encontrado em " + file.getName());
+        writeUtf8(file, source.replace(original, replacement));
+    }
+
+    private String readUtf8(File file) throws Exception {
+        try (InputStream in = new FileInputStream(file);
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[4096];
+            int count;
+            while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+            return new String(out.toByteArray(), "UTF-8");
+        }
+    }
+
+    private void writeUtf8(File file, String value) throws Exception {
+        try (FileOutputStream out = new FileOutputStream(file)) {
+            out.write(value.getBytes("UTF-8"));
         }
     }
 
@@ -173,6 +424,7 @@ public final class MainActivity extends Activity {
 
     private void showCollection() {
         gameOpen = false;
+        activeGameId = null;
         if (webView != null) {
             webView.stopLoading();
             root.removeView(webView);
@@ -210,10 +462,38 @@ public final class MainActivity extends Activity {
         line.bottomMargin = dp(24);
         body.addView(accent, line);
 
+        LinearLayout scoreCard = new LinearLayout(this);
+        scoreCard.setOrientation(LinearLayout.VERTICAL);
+        scoreCard.setPadding(dp(18), dp(12), dp(18), dp(12));
+        scoreCard.setBackground(rounded(CARD, 18, Color.rgb(70, 61, 88)));
+        TextView scoreCaption = label("PLACAR GERAL", 11, MUTED, true);
+        scoreCaption.setLetterSpacing(.12f);
+        scoreCard.addView(scoreCaption, new LinearLayout.LayoutParams(-1, dp(20)));
+        scoreTotalView = label("0 PTS", 30, TEXT, true);
+        scoreCard.addView(scoreTotalView, new LinearLayout.LayoutParams(-1, dp(40)));
+        scoreDetailsView = label("", 11, MUTED, false);
+        scoreCard.addView(scoreDetailsView, new LinearLayout.LayoutParams(-1, dp(20)));
+        LinearLayout.LayoutParams scoreParams = new LinearLayout.LayoutParams(-1, dp(94));
+        scoreParams.bottomMargin = dp(18);
+        body.addView(scoreCard, scoreParams);
+        refreshScoreBoard();
+
         body.addView(gameCard("Frutris", "Jogo de blocos · controles por gestos", "frutris.webp", "frutris"));
         View gap = new View(this);
         body.addView(gap, new LinearLayout.LayoutParams(1, dp(14)));
         body.addView(gameCard("Cobrinha", "Jogo da cobrinha · deslize para direcionar", "cobrinha.webp", "cobrinha"));
+
+        TextView updateButton = label("VERIFICAR ATUALIZAÇÕES", 12, TEXT, true);
+        updateButton.setGravity(Gravity.CENTER);
+        updateButton.setBackground(new RippleDrawable(
+                ColorStateList.valueOf(Color.argb(35, 255, 255, 255)),
+                rounded(CARD, 14, Color.rgb(91, 78, 116)), null));
+        updateButton.setClickable(true);
+        updateButton.setFocusable(true);
+        updateButton.setOnClickListener(v -> checkForGameUpdates(updateButton, false));
+        LinearLayout.LayoutParams updateParams = new LinearLayout.LayoutParams(-1, dp(48));
+        updateParams.topMargin = dp(16);
+        body.addView(updateButton, updateParams);
 
         TextView footer = label(assetsReady ? "TOQUE EM UM JOGO PARA ABRIR" : "NÃO FOI POSSÍVEL PREPARAR OS JOGOS",
                 10, assetsReady ? MUTED : Color.rgb(255, 138, 128), true);
@@ -290,6 +570,8 @@ public final class MainActivity extends Activity {
     private void openGame(String id) {
         if (!assetsReady) { showCollection(); return; }
         gameOpen = true;
+        activeGameId = id;
+        lastReportedScore = 0;
         root.removeAllViews();
         webView = new WebView(this);
         webView.setBackgroundColor(Color.BLACK);
@@ -312,6 +594,23 @@ public final class MainActivity extends Activity {
         webView.addJavascriptInterface(new Object() {
             @JavascriptInterface public void exitGame() {
                 runOnUiThread(() -> { if (gameOpen) { showCollection(); enterImmersive(); } });
+            }
+            @JavascriptInterface public void reportScore(String gameId, int score) {
+                if (score < 0 || score > 1000000000) return;
+                synchronized (MainActivity.this) {
+                    if (!gameOpen || activeGameId == null || !activeGameId.equals(gameId)) return;
+                    if (score < lastReportedScore) {
+                        lastReportedScore = score;
+                        return;
+                    }
+                    int delta = score - lastReportedScore;
+                    if (delta <= 0) return;
+                    lastReportedScore = score;
+                    String key = gameId + "_points";
+                    long current = appPrefs.getLong(key, 0L);
+                    long updated = current > Long.MAX_VALUE - delta ? Long.MAX_VALUE : current + delta;
+                    appPrefs.edit().putLong(key, updated).commit();
+                }
             }
         }, "CFAndroid");
         webView.setWebViewClient(new WebViewClient() {
