@@ -1,19 +1,21 @@
-/* Android integration: keep SAIR in the unused strip above the Frutris HUD. */
+/* C-F Android: keep Frutris exit control inside the game HUD, outside playfield. */
+.game-hud {
+  position: relative;
+}
 .game-exit {
-  position: fixed;
-  top: 0;
-  right: max(8px, env(safe-area-inset-right));
-  z-index: 220;
-  width: 40px;
-  min-width: 40px;
-  height: 18px;
-  padding: 0;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 30;
+  width: 44px;
+  min-width: 44px;
+  height: 24px;
+  padding: 0 4px;
   border: 1px solid var(--border-color);
-  border-top: 0;
-  border-radius: 0 0 5px 5px;
-  background: color-mix(in srgb, var(--panel-bg) 90%, transparent);
+  border-radius: 5px;
+  background: var(--panel-bg);
   color: var(--text-color);
-  font: 800 8px/1 monospace;
+  font: 800 9px/1 monospace;
   letter-spacing: .05em;
   box-shadow: 0 1px 4px rgba(0,0,0,.2);
   cursor: pointer;
@@ -21,4 +23,5 @@
 }
 .game-exit:active {
   filter: brightness(1.25);
+  transform: translateY(1px);
 }
