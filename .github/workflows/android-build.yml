@@ -48,6 +48,7 @@ jobs:
           test -f app/src/main/assets/bundle_parts/24.b64
           test -f app/src/main/assets/frutris-exit-fix.css
           test -s app/src/main/res/drawable-nodpi/ic_launcher_cfa.webp
+          grep -F 'android:inset="21dp"' app/src/main/res/drawable/ic_launcher_foreground.xml
           test -f tools/mirror_site.py
           test -f updates/latest.json
           test -f updates/latest.json.sig.b64
@@ -187,7 +188,7 @@ jobs:
           unzip -Z1 "$APK" | grep -E "^res/mipmap-nodpi(-v[0-9]+)?/ic_launcher\\.webp$"
           unzip -Z1 "$APK" | grep -Fx "res/drawable/ic_launcher_foreground.xml"
           unzip -Z1 "$APK" | grep -E "^res/drawable-nodpi(-v[0-9]+)?/ic_launcher_cfa\\.webp$"
-          echo "APK assinado, pacote e ícone adaptativo validados."
+          echo "APK assinado, pacote e ícone adaptativo com margem segura validados."
 
       - name: Compose artifact name from versionName
         run: |
