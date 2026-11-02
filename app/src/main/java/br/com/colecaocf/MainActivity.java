@@ -89,7 +89,7 @@ public final class MainActivity extends Activity {
     }
 
     private boolean installGameFiles() {
-        File marker = new File(webRoot, ".bundle-v4");
+        File marker = new File(webRoot, ".bundle-v5");
         File f = new File(webRoot, "apps/frutris/index.html");
         File c = new File(webRoot, "apps/cobrinha/index.html");
         File frutrisIcon = new File(webRoot, "assets/img/Icones/frutris.webp");
@@ -121,6 +121,16 @@ public final class MainActivity extends Activity {
             }
             if (!f.isFile() || !c.isFile() || !frutrisIcon.isFile() || !cobrinhaIcon.isFile() || !exitScript.isFile()) {
                 throw new IllegalStateException("O pacote não contém os dois jogos, os ícones originais e o script de saída.");
+            }
+            File frutrisCss = new File(webRoot, "apps/frutris/css/components.css");
+            if (!frutrisCss.isFile()) {
+                throw new IllegalStateException("A folha de estilo original do Frutris não foi encontrada.");
+            }
+            try (InputStream patch = getAssets().open("frutris-exit-fix.css");
+                 FileOutputStream stream = new FileOutputStream(frutrisCss, true)) {
+                byte[] patchBuffer = new byte[2048];
+                int count;
+                while ((count = patch.read(patchBuffer)) != -1) stream.write(patchBuffer, 0, count);
             }
             try (FileOutputStream out = new FileOutputStream(marker)) { out.write(1); }
             return true;
