@@ -121,6 +121,8 @@ final class AlgorithmusApiBridge {
               var ORIGIN = 'https://algorithomus.com.br';
               var API_BASE = ORIGIN + '/api/';
               var ACTION_OK = /^[A-Za-z0-9/_-]+$/;
+              var CACHE_PREFIX = '__cf_hybrid_api_v1:';
+              var MAX_CACHE_CHARS = 400000;
 
               function apiAction(url) {
                 if (typeof url !== 'string') { return null; }
@@ -137,12 +139,59 @@ final class AlgorithmusApiBridge {
                 return action;
               }
 
+              // Cache only read-only story data. Mutations and protected actions
+              // must still be confirmed by the server when the device is online.
+              function cacheable(action) {
+                return action === 'messages/list' ||
+                       action === 'messages/open' ||
+                       action === 'messages/final' ||
+                       action === 'diary/state' ||
+                       action === 'diary/open';
+              }
+
+              function cacheKey(action, body) {
+                var value = action + '|' + (body || '{}');
+                var hash = 2166136261;
+                for (var i = 0; i < value.length; i++) {
+                  hash = Math.imul(hash ^ value.charCodeAt(i), 16777619);
+                }
+                return CACHE_PREFIX + (hash >>> 0).toString(16) + ':' + value.length;
+              }
+
+              function readCache(action, body) {
+                if (!cacheable(action)) { return null; }
+                try { return window.localStorage.getItem(cacheKey(action, body)); }
+                catch (e) { return null; }
+              }
+
+              function writeCache(action, body, text) {
+                if (!cacheable(action) || typeof text !== 'string' ||
+                    text.length === 0 || text.length > MAX_CACHE_CHARS) return;
+                try { window.localStorage.setItem(cacheKey(action, body), text); }
+                catch (e) { /* armazenamento cheio: mantém a resposta online */ }
+              }
+
               function unavailableResponse(text) {
                 return Promise.resolve(new Response(text, {
                   status: 503,
                   statusText: 'Service Unavailable',
                   headers: { 'Content-Type': 'application/json' }
                 }));
+              }
+
+              function offlineResponse(action, body) {
+                var cached = readCache(action, body);
+                if (cached !== null) {
+                  return Promise.resolve(new Response(cached, {
+                    status: 200,
+                    statusText: 'OK',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'X-CF-Offline-Cache': 'hit'
+                    }
+                  }));
+                }
+                return unavailableResponse(ApiBridge.fetchApi(action, body));
               }
 
               window.fetch = function (input, init) {
@@ -159,22 +208,32 @@ final class AlgorithmusApiBridge {
                   var action = apiAction(url);
                   if (action !== null) {
                     if (ApiBridge.isOnline() && nativeFetch) {
-                      // The online POST is sent exactly once to the original server.
-                      // If connectivity drops mid-request, expose a real network error
-                      // to the app instead of pretending the API returned HTTP 200.
-                      return nativeFetch(input, init).catch(function () {
-                        return unavailableResponse('{"ok":false,"error":"sem-internet"}');
-                      });
+                      // Send each online POST once. On a network failure, reuse
+                      // only a previously cached read response when one exists.
+                      return nativeFetch(input, init).then(function (response) {
+                        var contentType = response.headers ?
+                            (response.headers.get('Content-Type') || '') : '';
+                        if (!response.ok || !cacheable(action) ||
+                            contentType.toLowerCase().indexOf('json') === -1) {
+                          return response;
+                        }
+                        return response.clone().text().then(function (text) {
+                          writeCache(action, body, text);
+                          return new Response(text, {
+                            status: response.status,
+                            statusText: response.statusText,
+                            headers: response.headers
+                          });
+                        }).catch(function () { return response; });
+                      }).catch(function () { return offlineResponse(action, body); });
                     }
-                    var text = ApiBridge.fetchApi(action, body);
-                    return unavailableResponse(text);
+                    return offlineResponse(action, body);
                   }
                 } catch (e) {
                   /* segue para o fetch nativo */
                 }
                 if (nativeFetch) { return nativeFetch(input, init); }
                 return Promise.reject(new Error('fetch indisponivel'));
-              };
-            })();
+              };            })();
             """;
 }
