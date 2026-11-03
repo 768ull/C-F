@@ -286,7 +286,7 @@ jobs:
           disable-linux-hw-accel: false
           emulator-boot-timeout: 600
           script: |
-            set -euo pipefail
+            set -eu
             if [ "$CF_STABLE_SIGNING_AVAILABLE" = "true" ]; then
               APK="app/build/outputs/apk/release/app-release.apk"
               PACKAGE="br.com.cfa"
