@@ -222,6 +222,9 @@ jobs:
           test -s "$APK"
           SIGNATURE_INFO="$("$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK")"
           printf '%s\\n' "$SIGNATURE_INFO"
+          printf '%s\\n' "$SIGNATURE_INFO" | grep -F "Verified using v1 scheme (JAR signing): true"
+          printf '%s\\n' "$SIGNATURE_INFO" | grep -F "Verified using v2 scheme (APK Signature Scheme v2): true"
+          "$BUILD_TOOLS/zipalign" -c -v 4 "$APK"
           if [ "$CF_STABLE_SIGNING_AVAILABLE" != "true" ]; then
             printf '%s\\n' "$SIGNATURE_INFO" | grep -F "a2d3deec433e0563e2180aa9364b8560018cfc6884749e8fbe33d025ab44d28b"
           fi
