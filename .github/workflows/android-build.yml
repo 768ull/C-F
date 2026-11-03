@@ -50,6 +50,7 @@ jobs:
           grep -q 'onShowCustomView' app/src/main/java/br/com/colecaocf/MainActivity.java
           grep -q 'adaptVideoOrientation' app/src/main/java/br/com/colecaocf/MainActivity.java
           grep -q 'toggleVideoUi' app/src/main/java/br/com/colecaocf/MainActivity.java
+          grep -q 'torajokids' app/src/main/java/br/com/colecaocf/MainActivity.java
           if grep -q 'youtube-nocookie.com/embed/' app/src/main/java/br/com/colecaocf/MainActivity.java; then
             echo "::error::A aba de vídeos não pode voltar a depender do player incorporado do YouTube."
             exit 1

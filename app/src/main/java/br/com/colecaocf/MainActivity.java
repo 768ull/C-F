@@ -574,6 +574,26 @@ public final class MainActivity extends Activity {
                     "https://youtube.com/@torajo?si=K1F2cw5ktRqczQt6"));
             supportCard.addView(supportDivider());
             supportCard.addView(supportLinkItem(
+                    "TORAJO JOVEM",
+                    "Canal no YouTube · Torajo Jovem",
+                    "https://youtube.com/@torajojovem?si=b4PeV6UjEUCsLCgk"));
+            supportCard.addView(supportDivider());
+            supportCard.addView(supportLinkItem(
+                    "MDT PRODUÇÕES",
+                    "Canal no YouTube · MDT Produções",
+                    "https://youtube.com/@mdtproducoes?si=WFUuVesWT3qemu-y"));
+            supportCard.addView(supportDivider());
+            supportCard.addView(supportLinkItem(
+                    "BRUNO GEMIN",
+                    "Canal no YouTube · Bruno Gemin",
+                    "https://youtube.com/@bruno_gemin?si=RyFIVsfKmgto5IQv"));
+            supportCard.addView(supportDivider());
+            supportCard.addView(supportLinkItem(
+                    "TORAJO KIDS",
+                    "Canal no YouTube · Torajo Kids",
+                    "https://youtube.com/@torajokids?si=nNoHEkF09K1uWDg9"));
+            supportCard.addView(supportDivider());
+            supportCard.addView(supportLinkItem(
                     "SITE OFICIAL",
                     "Acesse o Mundo Torajo",
                     "https://mundotorajo.com.br/?atualizar=1"));
