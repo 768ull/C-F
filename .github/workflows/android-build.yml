@@ -258,11 +258,15 @@ jobs:
           printf '%s\\n' "$BADGING" | grep -F "package: name='$EXPECTED_ID'"
           printf '%s\\n' "$BADGING" | grep -E "application:.*icon="
           printf '%s\\n' "$BADGING" | grep -F "launchable-activity:"
-          unzip -Z1 "$APK" | grep -Fx "res/mipmap-anydpi-v26/ic_launcher.xml"
-          unzip -Z1 "$APK" | grep -E "^res/mipmap-nodpi(-v[0-9]+)?/ic_launcher\\.webp$"
-          unzip -Z1 "$APK" | grep -Fx "res/drawable/ic_launcher_foreground.xml"
-          unzip -Z1 "$APK" | grep -E "^res/drawable-nodpi(-v[0-9]+)?/ic_launcher_cfa\\.webp$"
-          echo "APK assinado, pacote e ícone adaptativo com margem segura validados."
+          APK_ENTRIES="$(unzip -Z1 "$APK")"
+          ICON_PATH="$(printf '%s\\n' "$BADGING" | sed -n "s/.*application:.*icon='\\([^']*\\)'.*/\\1/p" | head -n 1)"
+          test -n "$ICON_PATH"
+          printf '%s\\n' "$APK_ENTRIES" | grep -Fx "$ICON_PATH"
+          # Release resource optimisation can rename the compiled icon resource.
+          # Verify the actual resource referenced by the binary manifest.
+          echo "Launcher icon resource present in APK: $ICON_PATH"
+          echo "APK assinado, pacote e ícone adaptativo validados."
+
 
       - name: Enable KVM acceleration for Android emulator
         run: |
