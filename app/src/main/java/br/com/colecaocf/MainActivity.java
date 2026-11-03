@@ -990,6 +990,7 @@ public final class MainActivity extends Activity {
         videoCustomView = null;
         videoCustomViewCallback = null;
         if (videoTopBar != null) videoTopBar.setVisibility(View.VISIBLE);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         if (notifyPlayer && callback != null) callback.onCustomViewHidden();
         enterImmersive();
     }
@@ -1287,6 +1288,23 @@ public final class MainActivity extends Activity {
                 }
             }
         }, "CFAndroid");
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override public void onShowCustomView(View view, WebChromeClient.CustomViewCallback callback) {
+                if (videoCustomView != null) {
+                    try { callback.onCustomViewHidden(); } catch (Exception ignored) { }
+                    return;
+                }
+                videoCustomView = view;
+                videoCustomViewCallback = callback;
+                root.setBackgroundColor(Color.BLACK);
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                root.addView(view, new FrameLayout.LayoutParams(-1, -1));
+                enterImmersive();
+            }
+            @Override public void onHideCustomView() {
+                hideCustomVideoView(true);
+            }
+        });
         webView.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView v, String url) {
                 super.onPageFinished(v, url);

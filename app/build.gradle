@@ -10,8 +10,8 @@ android {
         applicationId "br.com.cfa"
         minSdk 24
         targetSdk 35
-        versionCode 26
-        versionName "1.2.16"
+        versionCode 27
+        versionName "1.2.17"
     }
 
     signingConfigs {
