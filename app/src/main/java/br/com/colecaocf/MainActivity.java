@@ -33,7 +33,13 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.widget.VideoView;
+import android.content.pm.ActivityInfo;
+import android.graphics.Matrix;
+import android.graphics.SurfaceTexture;
+import android.media.MediaPlayer;
+import android.os.Handler;
+import android.view.Surface;
+import android.view.TextureView;
 import android.widget.MediaController;
 
 import androidx.webkit.WebViewAssetLoader;
@@ -87,7 +93,13 @@ public final class MainActivity extends Activity {
     private SharedPreferences appPrefs;
     private TextView scoreTotalView;
     private TextView scoreDetailsView;
-    private VideoView localVideoView;
+    private TextureView videoSurface;
+    private MediaPlayer videoPlayer;
+    private MediaController videoControls;
+    private TextView videoScaleToggle;
+    private boolean videoFillScale = true;
+    private final Handler videoUiHandler = new Handler();
+    private Runnable videoTopBarHider;
     private int pendingVideoSlot = 1;
     private boolean resumeVideoAfterPause;
 
@@ -499,10 +511,7 @@ public final class MainActivity extends Activity {
         if (videoCustomView != null) hideCustomVideoView(true);
         gameOpen = false;
         videoOpen = false;
-        if (localVideoView != null) {
-            try { localVideoView.stopPlayback(); } catch (Exception ignored) { }
-            localVideoView = null;
-        }
+        releaseVideoPlayer();
         resumeVideoAfterPause = false;
         videoTopBar = null;
         activeGameId = null;
@@ -814,33 +823,45 @@ public final class MainActivity extends Activity {
             webView.destroy();
             webView = null;
         }
-        if (localVideoView != null) {
-            try { localVideoView.stopPlayback(); } catch (Exception ignored) { }
-            localVideoView = null;
-        }
+        releaseVideoPlayer();
         root.removeAllViews();
         root.setBackgroundColor(Color.BLACK);
+        // Tela cheia: o vídeo abre sempre em paisagem e cobre 100% do visor.
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
 
-        VideoView player = new VideoView(this);
-        localVideoView = player;
-        FrameLayout.LayoutParams playerParams = new FrameLayout.LayoutParams(-1, -1);
-        playerParams.topMargin = dp(56);
-        root.addView(player, playerParams);
+        TextureView surface = new TextureView(this);
+        videoSurface = surface;
+        surface.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
+            @Override public void onSurfaceTextureAvailable(SurfaceTexture texture, int width, int height) {
+                startVideoPlayback(video);
+            }
+            @Override public void onSurfaceTextureSizeChanged(SurfaceTexture texture, int width, int height) {
+                applyVideoScale();
+            }
+            @Override public boolean onSurfaceTextureDestroyed(SurfaceTexture texture) {
+                return true;
+            }
+            @Override public void onSurfaceTextureUpdated(SurfaceTexture texture) { }
+        });
+        root.addView(surface, new FrameLayout.LayoutParams(-1, -1));
+        surface.setOnClickListener(v -> showVideoUi());
 
         MediaController controls = new MediaController(this);
-        controls.setAnchorView(player);
-        player.setMediaController(controls);
-        player.setOnErrorListener((mediaPlayer, what, extra) -> {
-            Toast.makeText(this,
-                    "Não foi possível reproduzir este MP4. Confira se o arquivo foi importado por completo.",
-                    Toast.LENGTH_LONG).show();
-            return true;
+        videoControls = controls;
+        controls.setMediaPlayer(new MediaController.MediaPlayerControl() {
+            @Override public void start() { if (videoPlayer != null) videoPlayer.start(); }
+            @Override public void pause() { if (videoPlayer != null) videoPlayer.pause(); }
+            @Override public int getDuration() { return videoPlayer == null ? 0 : videoPlayer.getDuration(); }
+            @Override public int getCurrentPosition() { return videoPlayer == null ? 0 : videoPlayer.getCurrentPosition(); }
+            @Override public void seekTo(int pos) { if (videoPlayer != null) videoPlayer.seekTo(pos); }
+            @Override public boolean isPlaying() { return videoPlayer != null && videoPlayer.isPlaying(); }
+            @Override public int getBufferPercentage() { return 0; }
+            @Override public boolean canPause() { return true; }
+            @Override public boolean canSeekBackward() { return true; }
+            @Override public boolean canSeekForward() { return true; }
+            @Override public int getAudioSessionId() { return videoPlayer == null ? 0 : videoPlayer.getAudioSessionId(); }
         });
-        player.setOnPreparedListener(mediaPlayer -> {
-            mediaPlayer.setLooping(false);
-            player.start();
-            enterImmersive();
-        });
+        controls.setAnchorView(surface);
 
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
@@ -854,12 +875,109 @@ public final class MainActivity extends Activity {
             showCollection(false, true);
             enterImmersive();
         });
-        topBar.addView(back, new LinearLayout.LayoutParams(-1, -1));
+        topBar.addView(back, new LinearLayout.LayoutParams(0, -1, 1f));
+        videoScaleToggle = label(scaleToggleText(), 11, TEXT, true);
+        videoScaleToggle.setGravity(Gravity.CENTER);
+        videoScaleToggle.setContentDescription("Alternar entre tela cheia e proporção original");
+        videoScaleToggle.setOnClickListener(v -> {
+            videoFillScale = !videoFillScale;
+            videoScaleToggle.setText(scaleToggleText());
+            applyVideoScale();
+        });
+        topBar.addView(videoScaleToggle, new LinearLayout.LayoutParams(dp(124), -1));
         videoTopBar = topBar;
-        root.addView(topBar, new FrameLayout.LayoutParams(-1, dp(56), Gravity.TOP));
-
-        player.setVideoPath(video.getAbsolutePath());
+        root.addView(topBar, new FrameLayout.LayoutParams(-1, dp(52), Gravity.TOP));
         enterImmersive();
+    }
+
+    private String scaleToggleText() {
+        return videoFillScale ? "AJUSTAR SEM CORTAR" : "PREENCHER A TELA";
+    }
+
+    /** Mostra os controles por alguns segundos, como um player de vídeo padrão. */
+    private void showVideoUi() {
+        if (videoTopBar != null) videoTopBar.setVisibility(View.VISIBLE);
+        if (videoControls != null) videoControls.show(4000);
+        videoUiHandler.removeCallbacks(videoTopBarHider);
+        if (videoTopBarHider == null) {
+            videoTopBarHider = () -> {
+                if (videoTopBar != null) videoTopBar.setVisibility(View.GONE);
+            };
+        }
+        videoUiHandler.postDelayed(videoTopBarHider, 4500);
+    }
+
+    private void startVideoPlayback(File video) {
+        MediaPlayer player = new MediaPlayer();
+        videoPlayer = player;
+        try {
+            player.setDataSource(video.getAbsolutePath());
+            player.setSurface(new Surface(videoSurface.getSurfaceTexture()));
+            player.setOnVideoSizeChangedListener((mediaPlayer, width, height) -> applyVideoScale());
+            player.setOnPreparedListener(mediaPlayer -> {
+                mediaPlayer.setLooping(false);
+                mediaPlayer.start();
+                applyVideoScale();
+                showVideoUi();
+                enterImmersive();
+            });
+            player.setOnErrorListener((mediaPlayer, what, extra) -> {
+                Toast.makeText(this,
+                        "Não foi possível reproduzir este MP4. Confira se o arquivo foi importado por completo.",
+                        Toast.LENGTH_LONG).show();
+                showCollection(false, true);
+                enterImmersive();
+                return true;
+            });
+            player.prepareAsync();
+        } catch (Exception error) {
+            Toast.makeText(this,
+                    "Não foi possível reproduzir este MP4. Confira se o arquivo foi importado por completo.",
+                    Toast.LENGTH_LONG).show();
+            showCollection(false, true);
+            enterImmersive();
+        }
+    }
+
+    /**
+     * Aplica a escala do vídeo sobre a TextureView. No modo padrão o vídeo é
+     * ampliado até cobrir a tela inteira (tela cheia); no modo alternativo
+     * mantém a proporção original sem cortar nada.
+     */
+    private void applyVideoScale() {
+        if (videoSurface == null || videoPlayer == null) return;
+        int videoWidth = videoPlayer.getVideoWidth();
+        int videoHeight = videoPlayer.getVideoHeight();
+        if (videoWidth <= 0 || videoHeight <= 0) return;
+        float viewWidth = videoSurface.getWidth();
+        float viewHeight = videoSurface.getHeight();
+        if (viewWidth <= 0 || viewHeight <= 0) return;
+        float scale = videoFillScale
+                ? Math.max(viewWidth / videoWidth, viewHeight / videoHeight)
+                : Math.min(viewWidth / videoWidth, viewHeight / videoHeight);
+        Matrix matrix = new Matrix();
+        matrix.setScale(scale, scale);
+        matrix.postTranslate((viewWidth - videoWidth * scale) / 2f,
+                (viewHeight - videoHeight * scale) / 2f);
+        videoSurface.setTransform(matrix);
+        videoSurface.invalidate();
+    }
+
+    /** Encerra o player, libera os recursos e devolve a orientação normal. */
+    private void releaseVideoPlayer() {
+        if (videoTopBarHider != null) videoUiHandler.removeCallbacks(videoTopBarHider);
+        if (videoControls != null) {
+            try { videoControls.hide(); } catch (Exception ignored) { }
+            videoControls = null;
+        }
+        if (videoPlayer != null) {
+            try { videoPlayer.stop(); } catch (Exception ignored) { }
+            try { videoPlayer.release(); } catch (Exception ignored) { }
+            videoPlayer = null;
+        }
+        videoSurface = null;
+        videoScaleToggle = null;
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
     }
 
     private void hideCustomVideoView(boolean notifyPlayer) {
@@ -1206,16 +1324,16 @@ public final class MainActivity extends Activity {
         super.onResume();
         enterImmersive();
         if (webView != null) webView.onResume();
-        if (resumeVideoAfterPause && localVideoView != null) {
+        if (resumeVideoAfterPause && videoPlayer != null) {
             resumeVideoAfterPause = false;
-            localVideoView.start();
+            videoPlayer.start();
         }
     }
     @Override protected void onPause() {
         if (webView != null) webView.onPause();
-        if (localVideoView != null && localVideoView.isPlaying()) {
+        if (videoPlayer != null && videoPlayer.isPlaying()) {
             resumeVideoAfterPause = true;
-            localVideoView.pause();
+            videoPlayer.pause();
         }
         super.onPause();
     }
