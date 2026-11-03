@@ -45,7 +45,15 @@ jobs:
           grep -q 'addAlgorithomusExitButton' app/src/main/java/br/com/colecaocf/MainActivity.java
           grep -q 'REQUEST_IMPORT_OFFLINE_VIDEO' app/src/main/java/br/com/colecaocf/MainActivity.java
           grep -q 'ACTION_OPEN_DOCUMENT' app/src/main/java/br/com/colecaocf/MainActivity.java
-          grep -q 'setVideoPath(video.getAbsolutePath())' app/src/main/java/br/com/colecaocf/MainActivity.java
+          test -f app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
+          grep -q 'androidx.media3:media3-exoplayer' app/build.gradle
+          grep -q 'PlaybackParameters' app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
+          grep -q 'SCREEN_ORIENTATION_SENSOR_LANDSCAPE' app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
+          grep -q 'RESIZE_MODE_FIT' app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
+          if grep -q 'VideoView' app/src/main/java/br/com/colecaocf/MainActivity.java; then
+            echo "::error::O player antigo VideoView não pode ser usado na aba de vídeos."
+            exit 1
+          fi
           if grep -q 'youtube-nocookie.com/embed/' app/src/main/java/br/com/colecaocf/MainActivity.java; then
             echo "::error::A aba de vídeos não pode voltar a depender do player incorporado do YouTube."
             exit 1
