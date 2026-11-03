@@ -46,13 +46,6 @@ jobs:
           grep -q 'REQUEST_IMPORT_OFFLINE_VIDEO' app/src/main/java/br/com/colecaocf/MainActivity.java
           grep -q 'ACTION_OPEN_DOCUMENT' app/src/main/java/br/com/colecaocf/MainActivity.java
           test -f app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
-          test -f app/src/main/assets/videos/video-1.mp4
-          test -f app/src/main/assets/videos/video-2.mp4
-          test -f app/src/main/assets/videos/video-3.mp4
-          for video in app/src/main/assets/videos/video-{1,2,3}.mp4; do
-            test -s "$video" || { echo "::error::Vídeo obrigatório ausente ou vazio: $video"; exit 1; }
-            test "$(stat -c%s "$video")" -gt 1048576 || { echo "::error::Vídeo muito pequeno/incompleto: $video"; exit 1; }
-          done
           grep -q 'androidx.media3:media3-exoplayer' app/build.gradle
           grep -q 'PlaybackParameters' app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
           grep -q 'SCREEN_ORIENTATION_SENSOR_LANDSCAPE' app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
@@ -74,6 +67,32 @@ jobs:
           test -f tools/mirror_site.py
           test -f updates/latest.json
           test -f updates/latest.json.sig.b64
+
+      - name: Validate bundled MP4 videos before publishing from main
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for video in app/src/main/assets/videos/video-{1,2,3}.mp4; do
+            if [ ! -s "$video" ]; then
+              echo "::error::Vídeo pré-instalado ausente ou vazio: $video"
+              missing=1
+              continue
+            fi
+            size="$(stat -c%s "$video")"
+            if [ "$size" -le 1048576 ]; then
+              echo "::error::Vídeo pré-instalado incompleto (menos de 1 MiB): $video"
+              missing=1
+            else
+              echo "OK: $video ($size bytes)"
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::A publicação está bloqueada até os três MP4s originais serem adicionados em app/src/main/assets/videos/."
+            exit 1
+          fi
+          echo "Os três vídeos estão presentes e prontos para serem empacotados no APK."
 
       - name: Reconstruct and validate the two original games
         run: |
