@@ -55,6 +55,12 @@ android {
             minifyEnabled false
             if (System.getenv("CF_ANDROID_KEYSTORE_PATH")) {
                 signingConfig signingConfigs.stable
+            } else {
+                // Distributable development package: same .debug ID/certificate,
+                // but not marked debuggable so OEM file installers can sideload it.
+                signingConfig signingConfigs.development
+                applicationIdSuffix ".debug"
+                versionNameSuffix "-debug"
             }
         }
     }
