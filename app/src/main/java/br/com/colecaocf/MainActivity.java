@@ -15,15 +15,18 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.CookieManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -66,6 +69,10 @@ public final class MainActivity extends Activity {
     private FrameLayout root;
     private WebView webView;
     private WebViewAssetLoader assetLoader;
+    private boolean videoOpen;
+    private View videoCustomView;
+    private WebChromeClient.CustomViewCallback videoCustomViewCallback;
+    private View videoTopBar;
     private AlgorithmusSiteHandler algorithmusSite;
     private File webRoot;
     private volatile boolean gameOpen;
@@ -474,11 +481,18 @@ public final class MainActivity extends Activity {
     }
 
     private void showCollection() {
-        showCollection(false);
+        showCollection(false, false);
     }
 
     private void showCollection(boolean linksTab) {
+        showCollection(linksTab, false);
+    }
+
+    private void showCollection(boolean linksTab, boolean videosTab) {
+        if (videoCustomView != null) hideCustomVideoView(true);
         gameOpen = false;
+        videoOpen = false;
+        videoTopBar = null;
         activeGameId = null;
         if (webView != null) {
             webView.stopLoading();
@@ -497,7 +511,8 @@ public final class MainActivity extends Activity {
         body.setPadding(dp(24), dp(30), dp(24), dp(104));
         scroll.addView(body);
 
-        TextView eyebrow = label(linksTab ? "APOIO E LINKS OFICIAIS" : "COLEÇÃO DE JOGOS E APLICATIVOS", 11, MUTED, true);
+        TextView eyebrow = label(linksTab ? "APOIO E LINKS OFICIAIS" :
+                (videosTab ? "VÍDEOS DO TORAJO" : "COLEÇÃO DE JOGOS E APLICATIVOS"), 11, MUTED, true);
         eyebrow.setLetterSpacing(.16f);
         body.addView(eyebrow, new LinearLayout.LayoutParams(-1, dp(28)));
 
@@ -505,7 +520,8 @@ public final class MainActivity extends Activity {
         title.setLetterSpacing(-.04f);
         body.addView(title, new LinearLayout.LayoutParams(-1, dp(60)));
 
-        TextView subtitle = label(linksTab ? "Acompanhe e apoie o Mundo Torajo." : "Três experiências. Uma coleção.", 15, MUTED, false);
+        TextView subtitle = label(linksTab ? "Acompanhe e apoie o Mundo Torajo." :
+                (videosTab ? "Assista aos vídeos sem sair do aplicativo." : "Três experiências. Uma coleção."), 15, MUTED, false);
         LinearLayout.LayoutParams sub = new LinearLayout.LayoutParams(-1, dp(32));
         sub.bottomMargin = dp(20);
         body.addView(subtitle, sub);
@@ -549,6 +565,14 @@ public final class MainActivity extends Activity {
             LinearLayout.LayoutParams noteParams = new LinearLayout.LayoutParams(-1, dp(34));
             noteParams.topMargin = dp(12);
             supportCard.addView(note, noteParams);
+        } else if (videosTab) {
+            body.addView(videoCard("VÍDEO 1", "oTXwEcxFlUg"));
+            View videoGap1 = new View(this);
+            body.addView(videoGap1, new LinearLayout.LayoutParams(1, dp(14)));
+            body.addView(videoCard("VÍDEO 2", "VVeCPiyARPk"));
+            View videoGap2 = new View(this);
+            body.addView(videoGap2, new LinearLayout.LayoutParams(1, dp(14)));
+            body.addView(videoCard("VÍDEO 3", "LDzCd4y4Iv8"));
         } else {
             LinearLayout scoreCard = new LinearLayout(this);
             scoreCard.setOrientation(LinearLayout.VERTICAL);
@@ -580,7 +604,8 @@ public final class MainActivity extends Activity {
         }
 
         TextView footer = label(linksTab ? "APOIE E ACOMPANHE O TORAJO" :
-                (assetsReady ? "TOQUE EM UM JOGO PARA ABRIR" : "NÃO FOI POSSÍVEL PREPARAR OS JOGOS"),
+                (videosTab ? "TOQUE EM UM VÍDEO PARA ASSISTIR" :
+                        (assetsReady ? "TOQUE EM UM JOGO PARA ABRIR" : "NÃO FOI POSSÍVEL PREPARAR OS JOGOS")),
                 10, assetsReady ? MUTED : Color.rgb(255, 138, 128), true);
         footer.setGravity(Gravity.CENTER);
         footer.setLetterSpacing(.12f);
@@ -597,7 +622,9 @@ public final class MainActivity extends Activity {
         FrameLayout.LayoutParams navigationParams = new FrameLayout.LayoutParams(
                 -1, dp(68), Gravity.BOTTOM);
         root.addView(navigation, navigationParams);
-        navigation.addView(collectionTabButton("JOGOS", !linksTab, R.drawable.ic_launcher_cfa),
+        navigation.addView(collectionTabButton("JOGOS", !linksTab && !videosTab, R.drawable.ic_launcher_cfa),
+                new LinearLayout.LayoutParams(0, -1, 1f));
+        navigation.addView(collectionTabButton("VÍDEOS", videosTab, android.R.drawable.ic_media_play),
                 new LinearLayout.LayoutParams(0, -1, 1f));
         navigation.addView(collectionTabButton("LINKS", linksTab, android.R.drawable.ic_menu_share),
                 new LinearLayout.LayoutParams(0, -1, 1f));
@@ -622,8 +649,149 @@ public final class MainActivity extends Activity {
         TextView text = label(title, 12, selected ? TEXT : MUTED, true);
         text.setGravity(Gravity.CENTER_VERTICAL);
         tab.addView(text);
-        tab.setOnClickListener(v -> showCollection("LINKS".equals(title)));
+        tab.setOnClickListener(v -> showCollection("LINKS".equals(title), "VÍDEOS".equals(title)));
         return tab;
+    }
+
+
+    private View videoCard(String title, String videoId) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setPadding(dp(16), dp(14), dp(16), dp(14));
+        card.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(35, 255, 255, 255)),
+                rounded(CARD, 20, Color.rgb(47, 49, 55)), null));
+        card.setClickable(true);
+        card.setFocusable(true);
+        card.setContentDescription("Assistir " + title + " dentro do aplicativo");
+
+        TextView play = label("▶", 22, TEXT, true);
+        play.setGravity(Gravity.CENTER);
+        play.setBackground(rounded(Color.rgb(76, 35, 45), 16, Color.TRANSPARENT));
+        LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(dp(58), dp(58));
+        playParams.rightMargin = dp(16);
+        card.addView(play, playParams);
+
+        LinearLayout labels = new LinearLayout(this);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        labels.setGravity(Gravity.CENTER_VERTICAL);
+        labels.addView(label(title, 17, TEXT, true),
+                new LinearLayout.LayoutParams(-1, dp(28)));
+        labels.addView(label("Toque para assistir no C-F-A", 11, MUTED, false),
+                new LinearLayout.LayoutParams(-1, dp(26)));
+        card.addView(labels, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        TextView arrow = label("›", 30, MUTED, false);
+        arrow.setGravity(Gravity.CENTER);
+        card.addView(arrow, new LinearLayout.LayoutParams(dp(24), dp(42)));
+        card.setOnClickListener(v -> openVideo(videoId));
+        return card;
+    }
+
+    private void openVideo(String videoId) {
+        if (videoCustomView != null) hideCustomVideoView(true);
+        gameOpen = false;
+        videoOpen = true;
+        activeGameId = null;
+        synchronized (this) { scoreSession++; }
+        if (webView != null) {
+            webView.stopLoading();
+            root.removeView(webView);
+            webView.destroy();
+            webView = null;
+        }
+        root.removeAllViews();
+        root.setBackgroundColor(Color.BLACK);
+
+        webView = new WebView(this);
+        webView.setBackgroundColor(Color.BLACK);
+        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        webView.setVerticalScrollBarEnabled(false);
+        webView.setHorizontalScrollBarEnabled(false);
+        WebSettings settings = webView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setDatabaseEnabled(true);
+        settings.setAllowFileAccess(false);
+        settings.setAllowContentAccess(false);
+        settings.setSupportZoom(false);
+        settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
+        settings.setTextZoom(100);
+        settings.setMediaPlaybackRequiresUserGesture(true);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        settings.setLoadWithOverviewMode(true);
+        settings.setUseWideViewPort(true);
+        settings.setSupportMultipleWindows(false);
+        settings.setJavaScriptCanOpenWindowsAutomatically(false);
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+
+        webView.setWebViewClient(new WebViewClient() {
+            @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                String scheme = request.getUrl().getScheme();
+                return !("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme));
+            }
+            @Override public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                String scheme = Uri.parse(url).getScheme();
+                return !("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme));
+            }
+        });
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override public void onShowCustomView(View view, CustomViewCallback callback) {
+                if (videoCustomView != null) {
+                    callback.onCustomViewHidden();
+                    return;
+                }
+                videoCustomView = view;
+                videoCustomViewCallback = callback;
+                if (videoTopBar != null) videoTopBar.setVisibility(View.GONE);
+                root.addView(view, new FrameLayout.LayoutParams(-1, -1));
+                enterImmersive();
+            }
+
+            @Override public void onHideCustomView() {
+                hideCustomVideoView(false);
+            }
+        });
+
+        FrameLayout.LayoutParams playerParams = new FrameLayout.LayoutParams(-1, -1);
+        playerParams.topMargin = dp(56);
+        root.addView(webView, playerParams);
+
+        LinearLayout topBar = new LinearLayout(this);
+        topBar.setOrientation(LinearLayout.HORIZONTAL);
+        topBar.setGravity(Gravity.CENTER_VERTICAL);
+        topBar.setPadding(dp(18), 0, dp(18), 0);
+        topBar.setBackgroundColor(Color.rgb(22, 23, 27));
+        TextView back = label("‹  VOLTAR AOS VÍDEOS", 13, TEXT, true);
+        back.setGravity(Gravity.CENTER_VERTICAL);
+        back.setContentDescription("Voltar para a lista de vídeos");
+        back.setOnClickListener(v -> {
+            showCollection(false, true);
+            enterImmersive();
+        });
+        topBar.addView(back, new LinearLayout.LayoutParams(-1, -1));
+        videoTopBar = topBar;
+        root.addView(topBar, new FrameLayout.LayoutParams(-1, dp(56), Gravity.TOP));
+
+        String embedUrl = "https://www.youtube-nocookie.com/embed/" + videoId
+                + "?autoplay=0&controls=1&playsinline=1&rel=0&hl=pt-BR&fs=1";
+        webView.loadUrl(embedUrl);
+        enterImmersive();
+    }
+
+    private void hideCustomVideoView(boolean notifyPlayer) {
+        if (videoCustomView == null) return;
+        View custom = videoCustomView;
+        if (custom.getParent() instanceof ViewGroup) {
+            ((ViewGroup) custom.getParent()).removeView(custom);
+        }
+        WebChromeClient.CustomViewCallback callback = videoCustomViewCallback;
+        videoCustomView = null;
+        videoCustomViewCallback = null;
+        if (videoTopBar != null) videoTopBar.setVisibility(View.VISIBLE);
+        if (notifyPlayer && callback != null) callback.onCustomViewHidden();
+        enterImmersive();
     }
 
     private View supportLinkItem(String title, String detail, String url) {
@@ -947,6 +1115,8 @@ public final class MainActivity extends Activity {
     }
 
     @Override @SuppressWarnings("deprecation") public void onBackPressed() {
+        if (videoCustomView != null) { hideCustomVideoView(true); return; }
+        if (videoOpen) { showCollection(false, true); enterImmersive(); return; }
         if (gameOpen) { showCollection(); enterImmersive(); return; }
         super.onBackPressed();
     }
