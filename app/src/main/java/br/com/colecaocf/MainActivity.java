@@ -97,7 +97,8 @@ public final class MainActivity extends Activity {
     private MediaPlayer videoPlayer;
     private MediaController videoControls;
     private TextView videoScaleToggle;
-    private boolean videoFillScale = true;
+    private boolean videoFillScale = false;
+    private boolean videoOrientationAdapted;
     private final Handler videoUiHandler = new Handler();
     private Runnable videoTopBarHider;
     private int pendingVideoSlot = 1;
@@ -826,7 +827,10 @@ public final class MainActivity extends Activity {
         releaseVideoPlayer();
         root.removeAllViews();
         root.setBackgroundColor(Color.BLACK);
-        // Tela cheia: o vídeo abre sempre em paisagem e cobre 100% do visor.
+        videoFillScale = appPrefs.getBoolean("video_fill_scale", false);
+        videoOrientationAdapted = false;
+        // Tela cheia sem cortes: por padrão o vídeo mantém a proporção original
+        // e a orientação acompanha o formato do vídeo (vertical ou horizontal).
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
 
         TextureView surface = new TextureView(this);
@@ -881,6 +885,7 @@ public final class MainActivity extends Activity {
         videoScaleToggle.setContentDescription("Alternar entre tela cheia e proporção original");
         videoScaleToggle.setOnClickListener(v -> {
             videoFillScale = !videoFillScale;
+            appPrefs.edit().putBoolean("video_fill_scale", videoFillScale).apply();
             videoScaleToggle.setText(scaleToggleText());
             applyVideoScale();
         });
@@ -913,7 +918,10 @@ public final class MainActivity extends Activity {
         try {
             player.setDataSource(video.getAbsolutePath());
             player.setSurface(new Surface(videoSurface.getSurfaceTexture()));
-            player.setOnVideoSizeChangedListener((mediaPlayer, width, height) -> applyVideoScale());
+            player.setOnVideoSizeChangedListener((mediaPlayer, width, height) -> {
+                applyVideoScale();
+                adaptVideoOrientation();
+            });
             player.setOnPreparedListener(mediaPlayer -> {
                 mediaPlayer.setLooping(false);
                 mediaPlayer.start();
@@ -940,9 +948,25 @@ public final class MainActivity extends Activity {
     }
 
     /**
-     * Aplica a escala do vídeo sobre a TextureView. No modo padrão o vídeo é
-     * ampliado até cobrir a tela inteira (tela cheia); no modo alternativo
-     * mantém a proporção original sem cortar nada.
+     * Trava a orientação da tela no formato do próprio vídeo: vídeos
+     * verticais abrem em retrato e vídeos horizontais abrem em paisagem,
+     * sempre em tela cheia e sem cortar a imagem.
+     */
+    private void adaptVideoOrientation() {
+        if (videoSurface == null || videoPlayer == null || videoOrientationAdapted) return;
+        int videoWidth = videoPlayer.getVideoWidth();
+        int videoHeight = videoPlayer.getVideoHeight();
+        if (videoWidth <= 0 || videoHeight <= 0) return;
+        videoOrientationAdapted = true;
+        setRequestedOrientation(videoHeight > videoWidth
+                ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                : ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+    }
+
+    /**
+     * Aplica a escala do vídeo sobre a TextureView. No modo padrão o vídeo
+     * mantém a proporção original, sem cortar nada (faixas pretas completam
+     * a tela); no modo alternativo ele é ampliado até preencher a tela inteira.
      */
     private void applyVideoScale() {
         if (videoSurface == null || videoPlayer == null) return;
