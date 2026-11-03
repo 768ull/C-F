@@ -46,6 +46,13 @@ jobs:
           grep -q 'REQUEST_IMPORT_OFFLINE_VIDEO' app/src/main/java/br/com/colecaocf/MainActivity.java
           grep -q 'ACTION_OPEN_DOCUMENT' app/src/main/java/br/com/colecaocf/MainActivity.java
           test -f app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
+          test -f app/src/main/assets/videos/video-1.mp4
+          test -f app/src/main/assets/videos/video-2.mp4
+          test -f app/src/main/assets/videos/video-3.mp4
+          for video in app/src/main/assets/videos/video-{1,2,3}.mp4; do
+            test -s "$video" || { echo "::error::Vídeo obrigatório ausente ou vazio: $video"; exit 1; }
+            test "$(stat -c%s "$video")" -gt 1048576 || { echo "::error::Vídeo muito pequeno/incompleto: $video"; exit 1; }
+          done
           grep -q 'androidx.media3:media3-exoplayer' app/build.gradle
           grep -q 'PlaybackParameters' app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
           grep -q 'SCREEN_ORIENTATION_SENSOR_LANDSCAPE' app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
