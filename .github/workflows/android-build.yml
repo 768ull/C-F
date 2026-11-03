@@ -220,6 +220,8 @@ jobs:
             --ks-key-alias cfa-development \
             --ks-pass pass:CFA-Public-Debug-2026 \
             --key-pass pass:CFA-Public-Debug-2026 \
+            --min-sdk-version 1 \
+            --max-sdk-version 10000 \
             --v1-signing-enabled true \
             --v2-signing-enabled true \
             --v3-signing-enabled true \
