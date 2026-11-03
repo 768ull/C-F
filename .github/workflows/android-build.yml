@@ -289,19 +289,7 @@ jobs:
           disable-animations: true
           disable-linux-hw-accel: false
           emulator-boot-timeout: 600
-          script: |
-            set -eu
-            if [ "$CF_STABLE_SIGNING_AVAILABLE" = "true" ]; then
-              APK="app/build/outputs/apk/release/app-release.apk"
-              PACKAGE="br.com.cfa"
-            else
-              APK="app/build/outputs/apk/release/app-release.apk"
-              PACKAGE="br.com.cfa.debug"
-            fi
-            test -s "$APK"
-            adb install -r "$APK"
-            adb shell pm path "$PACKAGE"
-            adb shell dumpsys package "$PACKAGE" | grep -E "versionCode=|versionName="
+          script: bash tools/install_apk_emulator.sh
 
       - name: Compose artifact name from versionName
         run: |
