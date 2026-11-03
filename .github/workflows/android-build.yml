@@ -203,18 +203,18 @@ jobs:
         if: env.CF_STABLE_SIGNING_AVAILABLE == 'true'
         run: gradle --no-daemon :app:assembleRelease :app:bundleRelease
 
-      - name: Build development APK when permanent signature is not configured
+      - name: Build non-debuggable development distribution APK when permanent signature is not configured
         if: env.CF_STABLE_SIGNING_AVAILABLE != 'true'
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon :app:assembleRelease
 
-      - name: Re-sign development APK with explicit v1, v2 and v3 schemes
+      - name: Re-sign non-debuggable development distribution APK with v1, v2 and v3 schemes
         if: env.CF_STABLE_SIGNING_AVAILABLE != 'true'
         shell: bash
         run: |
           set -euo pipefail
           BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-          RESIGNED="$RUNNER_TEMP/CFA-Android-1.2.16-debug-signed.apk"
+          APK="app/build/outputs/apk/release/app-release.apk"
+          RESIGNED="$RUNNER_TEMP/CFA-Android-1.2.16-debug-distribution-signed.apk"
           "$BUILD_TOOLS/apksigner" sign \
             --ks app/cfa-development.jks \
             --ks-key-alias cfa-development \
@@ -237,7 +237,7 @@ jobs:
             APK="app/build/outputs/apk/release/app-release.apk"
             EXPECTED_ID="br.com.cfa"
           else
-            APK="app/build/outputs/apk/debug/app-debug.apk"
+            APK="app/build/outputs/apk/release/app-release.apk"
             EXPECTED_ID="br.com.cfa.debug"
           fi
           test -s "$APK"
@@ -291,7 +291,7 @@ jobs:
               APK="app/build/outputs/apk/release/app-release.apk"
               PACKAGE="br.com.cfa"
             else
-              APK="app/build/outputs/apk/debug/app-debug.apk"
+              APK="app/build/outputs/apk/release/app-release.apk"
               PACKAGE="br.com.cfa.debug"
             fi
             test -s "$APK"
@@ -358,12 +358,12 @@ jobs:
             app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
 
-      - name: Upload development APK while permanent signature is pending
+      - name: Upload non-debuggable development distribution APK while permanent signature is pending
         if: env.CF_STABLE_SIGNING_AVAILABLE != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.CF_ARTIFACT_NAME }}
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
 
       - name: Publish APK in the versions menu (permanent download link)
@@ -380,7 +380,7 @@ jobs:
             NOTES="APK assinado com o certificado permanente C-F-A. Instalacao direta."
             PRE=""
           else
-            APK="app/build/outputs/apk/debug/app-debug.apk"
+            APK="app/build/outputs/apk/release/app-release.apk"
             TAG="v${version}-debug"
             FILE="CFA-Android-${version}-debug.apk"
             TITLE="C-F-A v${version} (development build)"
