@@ -46,6 +46,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Locale;
+import java.util.Map;
 import java.net.URL;
 import java.security.MessageDigest;
 import javax.net.ssl.HttpsURLConnection;
@@ -776,7 +777,11 @@ public final class MainActivity extends Activity {
 
         String embedUrl = "https://www.youtube-nocookie.com/embed/" + videoId
                 + "?autoplay=0&controls=1&playsinline=1&rel=0&hl=pt-BR&fs=1";
-        webView.loadUrl(embedUrl);
+        // O YouTube exige HTTP Referer em players incorporados dentro de WebViews.
+        // Use a origem HTTPS estável do WebViewAssetLoader para identificar este app.
+        Map<String, String> playerHeaders = Collections.singletonMap(
+                "Referer", "https://" + HOST + "/cfa-android/");
+        webView.loadUrl(embedUrl, playerHeaders);
         enterImmersive();
     }
 
