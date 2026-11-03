@@ -61,6 +61,17 @@ import javax.net.ssl.HttpsURLConnection;
 import org.json.JSONObject;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import android.app.Dialog;
+import android.content.ContentValues;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.drawable.ColorDrawable;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.view.Window;
+import java.io.OutputStream;
+import io.nayuki.qrcodegen.QrCode;
 
 public final class MainActivity extends Activity {
     private static final int BG = Color.rgb(16, 17, 20);
@@ -607,6 +618,38 @@ public final class MainActivity extends Activity {
             LinearLayout.LayoutParams noteParams = new LinearLayout.LayoutParams(-1, dp(34));
             noteParams.topMargin = dp(12);
             supportCard.addView(note, noteParams);
+
+            LinearLayout qrCard = new LinearLayout(this);
+            qrCard.setOrientation(LinearLayout.VERTICAL);
+            qrCard.setPadding(dp(16), dp(14), dp(16), dp(12));
+            qrCard.setBackground(rounded(CARD, 18, Color.rgb(47, 49, 55)));
+            LinearLayout.LayoutParams qrCardParams = new LinearLayout.LayoutParams(-1, -2);
+            qrCardParams.topMargin = dp(18);
+            body.addView(qrCard, qrCardParams);
+
+            TextView qrTitle = label("QR CODES DOS CANAIS E DO APLICATIVO", 16, TEXT, true);
+            qrTitle.setLetterSpacing(.06f);
+            qrCard.addView(qrTitle, new LinearLayout.LayoutParams(-1, dp(30)));
+            TextView qrSubtitle = label("Mostre o código para outro celular escanear ou salve a imagem.", 12, MUTED, false);
+            qrSubtitle.setMaxLines(3);
+            qrCard.addView(qrSubtitle, new LinearLayout.LayoutParams(-1, dp(46)));
+
+            qrCard.addView(qrItem("CANAL NO YOUTUBE", "QR code do canal Torajo", "TORAJO", "https://youtube.com/@torajo"));
+            qrCard.addView(supportDivider());
+            qrCard.addView(qrItem("TORAJO JOVEM", "QR code do canal Torajo Jovem", "TORAJO-JOVEM", "https://youtube.com/@torajojovem"));
+            qrCard.addView(supportDivider());
+            qrCard.addView(qrItem("MDT PRODUÇÕES", "QR code do canal MDT Produções", "MDT-PRODUCOES", "https://youtube.com/@mdtproducoes"));
+            qrCard.addView(supportDivider());
+            qrCard.addView(qrItem("BRUNO GEMIN", "QR code do canal Bruno Gemin", "BRUNO-GEMIN", "https://youtube.com/@bruno_gemin"));
+            qrCard.addView(supportDivider());
+            qrCard.addView(qrItem("TORAJO KIDS", "QR code do canal Torajo Kids", "TORAJO-KIDS", "https://youtube.com/@torajokids"));
+            qrCard.addView(supportDivider());
+            qrCard.addView(qrItem("BAIXAR O APLICATIVO", "Outro celular escaneia e baixa o C-F-A", "CFA", "https://github.com/768ull/C-F/releases/latest"));
+
+            TextView qrNote = label("Aponte a câmera de outro celular para o código mostrado na tela.", 10, MUTED, false);
+            LinearLayout.LayoutParams qrNoteParams = new LinearLayout.LayoutParams(-1, dp(34));
+            qrNoteParams.topMargin = dp(12);
+            qrCard.addView(qrNote, qrNoteParams);
         } else if (videosTab) {
             TextView offlineNote = label(
                     "IMPORTE CADA MP4 UMA VEZ. Os arquivos ficam salvos no C-F-A e podem ser assistidos sem YouTube e sem internet.",
@@ -1102,6 +1145,156 @@ public final class MainActivity extends Activity {
         } catch (Exception error) {
             Toast.makeText(this, "Não foi possível abrir o link.",
                     Toast.LENGTH_LONG).show();
+        }
+    }
+
+    /** Item da lista de QR codes da aba LINKS. Abre o visualizador do código ao ser tocado. */
+    private View qrItem(String title, String detail, String name, String url) {
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.HORIZONTAL);
+        item.setGravity(Gravity.CENTER_VERTICAL);
+        item.setPadding(dp(8), dp(7), dp(8), dp(7));
+        item.setMinimumHeight(dp(58));
+        item.setBackground(new RippleDrawable(
+                ColorStateList.valueOf(Color.argb(35, 255, 255, 255)),
+                rounded(Color.TRANSPARENT, 10, Color.TRANSPARENT), null));
+        item.setClickable(true);
+        item.setFocusable(true);
+        item.setContentDescription("Mostrar QR code: " + title);
+
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        copy.setGravity(Gravity.CENTER_VERTICAL);
+        copy.addView(label(title, 12, TEXT, true),
+                new LinearLayout.LayoutParams(-1, dp(22)));
+        copy.addView(label(detail, 10, MUTED, false),
+                new LinearLayout.LayoutParams(-1, dp(20)));
+        item.addView(copy, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        TextView icon = label("QR", 11, Color.rgb(129, 199, 132), true);
+        icon.setGravity(Gravity.CENTER);
+        icon.setBackground(rounded(Color.rgb(35, 56, 44), 10, Color.TRANSPARENT));
+        item.addView(icon, new LinearLayout.LayoutParams(dp(32), dp(32)));
+        item.setOnClickListener(v -> showQrCode(title, name, url));
+        return item;
+    }
+
+    /** Visualizador de QR code: outro celular pode escanear a tela ou salvar a imagem. */
+    private void showQrCode(String title, String name, String url) {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER_HORIZONTAL);
+        box.setPadding(dp(18), dp(18), dp(18), dp(18));
+        box.setBackground(rounded(Color.rgb(24, 25, 29), 20, Color.TRANSPARENT));
+
+        TextView heading = label(title, 15, TEXT, true);
+        heading.setGravity(Gravity.CENTER);
+        box.addView(heading, new LinearLayout.LayoutParams(-1, dp(30)));
+
+        ImageView image = new ImageView(this);
+        image.setImageBitmap(qrBitmap(url, 12));
+        image.setBackground(rounded(Color.WHITE, 14, Color.TRANSPARENT));
+        image.setPadding(dp(6), dp(6), dp(6), dp(6));
+        box.addView(image, new LinearLayout.LayoutParams(dp(300), dp(300)));
+
+        TextView hint = label("Aponte a câmera de outro celular para o código.", 11, MUTED, false);
+        hint.setGravity(Gravity.CENTER);
+        hint.setMaxLines(2);
+        LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-1, dp(34));
+        hintParams.topMargin = dp(8);
+        box.addView(hint, hintParams);
+
+        TextView save = label("SALVAR IMAGEM", 12, Color.WHITE, true);
+        save.setGravity(Gravity.CENTER);
+        save.setLetterSpacing(.05f);
+        save.setBackground(new RippleDrawable(
+                ColorStateList.valueOf(Color.argb(70, 255, 255, 255)),
+                rounded(Color.rgb(170, 38, 38), 20, Color.TRANSPARENT), null));
+        save.setClickable(true);
+        save.setFocusable(true);
+        save.setContentDescription("Salvar o QR code como imagem na galeria");
+        save.setOnClickListener(v -> {
+            saveQrImage(name, url);
+        });
+        LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(-1, dp(46));
+        saveParams.topMargin = dp(10);
+        box.addView(save, saveParams);
+
+        TextView close = label("FECHAR", 12, MUTED, true);
+        close.setGravity(Gravity.CENTER);
+        close.setPadding(dp(10), dp(6), dp(10), dp(6));
+        close.setClickable(true);
+        close.setFocusable(true);
+        close.setOnClickListener(v -> dialog.dismiss());
+        box.addView(close, new LinearLayout.LayoutParams(-2, dp(38)));
+
+        dialog.setContentView(box);
+        dialog.show();
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawable(new ColorDrawable(Color.argb(190, 0, 0, 0)));
+            window.setLayout(dp(342), -2);
+        }
+    }
+
+    /** Gera a imagem do QR code a partir do endereço, com borda branca de segurança. */
+    private Bitmap qrBitmap(String url, int modulePx) {
+        QrCode qr = QrCode.encodeText(url, QrCode.Ecc.MEDIUM);
+        int border = 4;
+        int size = (qr.size + border * 2) * modulePx;
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.drawColor(Color.WHITE);
+        Paint dark = new Paint();
+        dark.setColor(Color.BLACK);
+        dark.setStyle(Paint.Style.FILL);
+        for (int y = 0; y < qr.size; y++) {
+            for (int x = 0; x < qr.size; x++) {
+                if (qr.getModule(x, y)) {
+                    canvas.drawRect((x + border) * modulePx, (y + border) * modulePx,
+                            (x + border + 1) * modulePx, (y + border + 1) * modulePx, dark);
+                }
+            }
+        }
+        return bitmap;
+    }
+
+    /** Salva o QR code como imagem PNG na galeria (Android 10 ou superior) ou na pasta do aplicativo. */
+    private void saveQrImage(String name, String url) {
+        try {
+            Bitmap bitmap = qrBitmap(url, 26);
+            String fileName = "QR-" + name + ".png";
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.Images.Media.DISPLAY_NAME, fileName);
+                values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
+                values.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/C-F-A");
+                Uri saved = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+                if (saved == null) throw new java.io.IOException("Não foi possível criar o arquivo.");
+                try (OutputStream output = getContentResolver().openOutputStream(saved)) {
+                    if (output == null) throw new java.io.IOException("Não foi possível abrir o arquivo.");
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, output);
+                    output.flush();
+                }
+                Toast.makeText(this, "QR CODE SALVO EM IMAGENS › C-F-A.", Toast.LENGTH_LONG).show();
+            } else {
+                File base = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+                if (base == null) base = getFilesDir();
+                File directory = new File(base, "C-F-A");
+                if (!directory.isDirectory() && !directory.mkdirs() && !directory.isDirectory())
+                    throw new java.io.IOException("Não foi possível criar a pasta.");
+                File file = new File(directory, fileName);
+                try (FileOutputStream output = new FileOutputStream(file)) {
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, output);
+                    output.flush();
+                }
+                Toast.makeText(this, "QR CODE SALVO EM: " + file.getAbsolutePath(), Toast.LENGTH_LONG).show();
+            }
+        } catch (Exception error) {
+            Toast.makeText(this, "Não foi possível salvar a imagem do QR code.", Toast.LENGTH_LONG).show();
         }
     }
 
