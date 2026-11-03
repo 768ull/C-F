@@ -10,8 +10,8 @@ android {
         applicationId "br.com.cfa"
         minSdk 24
         targetSdk 35
-        versionCode 25
-        versionName "1.2.15"
+        versionCode 26
+        versionName "1.2.16"
     }
 
     signingConfigs {
@@ -22,6 +22,11 @@ android {
             storePassword "CFA-Public-Debug-2026"
             keyAlias "cfa-development"
             keyPassword "CFA-Public-Debug-2026"
+            // Sign with both legacy JAR (v1) and APK Signature (v2/v3) schemes
+            // for wider compatibility with OEM package installers.
+            enableV1Signing true
+            enableV2Signing true
+            enableV3Signing true
         }
         if (System.getenv("CF_ANDROID_KEYSTORE_PATH")) {
             stable {
@@ -29,6 +34,9 @@ android {
                 storePassword System.getenv("CF_ANDROID_KEYSTORE_PASSWORD")
                 keyAlias System.getenv("CF_ANDROID_KEY_ALIAS") ?: "cf-release"
                 keyPassword System.getenv("CF_ANDROID_KEY_PASSWORD")
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
             }
         }
     }
