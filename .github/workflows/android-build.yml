@@ -45,7 +45,8 @@ jobs:
           grep -q 'addAlgorithomusExitButton' app/src/main/java/br/com/colecaocf/MainActivity.java
           grep -q 'REQUEST_IMPORT_OFFLINE_VIDEO' app/src/main/java/br/com/colecaocf/MainActivity.java
           grep -q 'ACTION_OPEN_DOCUMENT' app/src/main/java/br/com/colecaocf/MainActivity.java
-          grep -q 'setVideoPath(video.getAbsolutePath())' app/src/main/java/br/com/colecaocf/MainActivity.java
+          grep -q 'SCREEN_ORIENTATION_SENSOR_LANDSCAPE' app/src/main/java/br/com/colecaocf/MainActivity.java
+          grep -q 'startVideoPlayback(video)' app/src/main/java/br/com/colecaocf/MainActivity.java
           if grep -q 'youtube-nocookie.com/embed/' app/src/main/java/br/com/colecaocf/MainActivity.java; then
             echo "::error::A aba de vídeos não pode voltar a depender do player incorporado do YouTube."
             exit 1
