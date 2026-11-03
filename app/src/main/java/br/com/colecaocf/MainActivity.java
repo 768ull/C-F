@@ -33,8 +33,6 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.widget.VideoView;
-import android.widget.MediaController;
 
 import androidx.webkit.WebViewAssetLoader;
 import androidx.webkit.WebViewCompat;
@@ -73,7 +71,6 @@ public final class MainActivity extends Activity {
     private FrameLayout root;
     private WebView webView;
     private WebViewAssetLoader assetLoader;
-    private boolean videoOpen;
     private View videoCustomView;
     private WebChromeClient.CustomViewCallback videoCustomViewCallback;
     private View videoTopBar;
@@ -87,9 +84,7 @@ public final class MainActivity extends Activity {
     private SharedPreferences appPrefs;
     private TextView scoreTotalView;
     private TextView scoreDetailsView;
-    private VideoView localVideoView;
     private int pendingVideoSlot = 1;
-    private boolean resumeVideoAfterPause;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -498,12 +493,6 @@ public final class MainActivity extends Activity {
     private void showCollection(boolean linksTab, boolean videosTab) {
         if (videoCustomView != null) hideCustomVideoView(true);
         gameOpen = false;
-        videoOpen = false;
-        if (localVideoView != null) {
-            try { localVideoView.stopPlayback(); } catch (Exception ignored) { }
-            localVideoView = null;
-        }
-        resumeVideoAfterPause = false;
         videoTopBar = null;
         activeGameId = null;
         if (webView != null) {
@@ -579,10 +568,10 @@ public final class MainActivity extends Activity {
             supportCard.addView(note, noteParams);
         } else if (videosTab) {
             TextView offlineNote = label(
-                    "IMPORTE CADA MP4 UMA VEZ. Os arquivos ficam salvos no C-F-A e podem ser assistidos sem YouTube e sem internet.",
+                    "OS TRÊS VÍDEOS VÊM INCLUÍDOS NO C-F-A E FUNCIONAM SEM INTERNET. Mantenha um cartão pressionado para substituir um vídeo por um MP4 seu.",
                     12, MUTED, false);
             offlineNote.setMaxLines(4);
-            LinearLayout.LayoutParams offlineNoteParams = new LinearLayout.LayoutParams(-1, dp(58));
+            LinearLayout.LayoutParams offlineNoteParams = new LinearLayout.LayoutParams(-1, dp(64));
             offlineNoteParams.bottomMargin = dp(12);
             body.addView(offlineNote, offlineNoteParams);
             body.addView(videoCard("VÍDEO 1", 1));
@@ -677,9 +666,23 @@ public final class MainActivity extends Activity {
         return new File(new File(getFilesDir(), "cfa-offline-videos"), "video-" + slot + ".mp4");
     }
 
+    private String bundledVideoAssetPath(int slot) {
+        return "videos/video-" + slot + ".mp4";
+    }
+
+    private boolean bundledVideoExists(int slot) {
+        try (InputStream input = getAssets().open(bundledVideoAssetPath(slot))) {
+            return input.read() != -1;
+        } catch (Exception missing) {
+            return false;
+        }
+    }
+
     private View videoCard(String title, int slot) {
         File savedVideo = offlineVideoFile(slot);
-        boolean available = savedVideo.isFile() && savedVideo.length() > 1024L;
+        boolean imported = savedVideo.isFile() && savedVideo.length() > 1024L;
+        boolean bundled = bundledVideoExists(slot);
+        boolean available = imported || bundled;
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.HORIZONTAL);
         card.setGravity(Gravity.CENTER_VERTICAL);
@@ -689,8 +692,8 @@ public final class MainActivity extends Activity {
         card.setClickable(true);
         card.setFocusable(true);
         card.setContentDescription(available
-                ? "Assistir " + title + " offline dentro do C-F-A. Segure para substituir o arquivo."
-                : "Importar arquivo MP4 para " + title);
+                ? "Assistir " + title + " em tela cheia no C-F-A. Segure para substituir o arquivo."
+                : "Vídeo não incluído. Toque para adicionar um MP4 local.");
 
         TextView play = label(available ? "▶" : "+", 24, TEXT, true);
         play.setGravity(Gravity.CENTER);
@@ -704,7 +707,9 @@ public final class MainActivity extends Activity {
         labels.setGravity(Gravity.CENTER_VERTICAL);
         labels.addView(label(title, 17, TEXT, true),
                 new LinearLayout.LayoutParams(-1, dp(28)));
-        labels.addView(label(available ? "SALVO NO C-F-A • ASSISTIR OFFLINE" : "TOQUE PARA IMPORTAR O MP4",
+        String videoStatus = imported ? "MP4 LOCAL • OFFLINE"
+                : (bundled ? "INCLUÍDO NO C-F-A • OFFLINE" : "MP4 AINDA NÃO EMBUTIDO");
+        labels.addView(label(videoStatus,
                         10, available ? Color.rgb(129, 199, 132) : MUTED, true),
                 new LinearLayout.LayoutParams(-1, dp(26)));
         card.addView(labels, new LinearLayout.LayoutParams(0, -2, 1f));
@@ -713,7 +718,7 @@ public final class MainActivity extends Activity {
         arrow.setGravity(Gravity.CENTER);
         card.addView(arrow, new LinearLayout.LayoutParams(dp(24), dp(42)));
         card.setOnClickListener(v -> {
-            if (offlineVideoFile(slot).isFile()) openVideo(slot);
+            if (offlineVideoFile(slot).isFile() || bundledVideoExists(slot)) openVideo(slot);
             else pickVideoForSlot(slot);
         });
         card.setOnLongClickListener(v -> {
@@ -797,69 +802,17 @@ public final class MainActivity extends Activity {
     }
 
     private void openVideo(int slot) {
-        File video = offlineVideoFile(slot);
-        if (!video.isFile() || video.length() < 1024L) {
+        File importedVideo = offlineVideoFile(slot);
+        if ((!importedVideo.isFile() || importedVideo.length() < 1024L) && !bundledVideoExists(slot)) {
             pickVideoForSlot(slot);
             return;
         }
-        if (videoCustomView != null) hideCustomVideoView(true);
-        gameOpen = false;
-        videoOpen = true;
-        activeGameId = null;
-        resumeVideoAfterPause = false;
-        synchronized (this) { scoreSession++; }
-        if (webView != null) {
-            webView.stopLoading();
-            root.removeView(webView);
-            webView.destroy();
-            webView = null;
+        Intent player = new Intent(this, LocalVideoPlayerActivity.class);
+        player.putExtra(LocalVideoPlayerActivity.EXTRA_SLOT, slot);
+        if (importedVideo.isFile() && importedVideo.length() > 1024L) {
+            player.putExtra(LocalVideoPlayerActivity.EXTRA_LOCAL_PATH, importedVideo.getAbsolutePath());
         }
-        if (localVideoView != null) {
-            try { localVideoView.stopPlayback(); } catch (Exception ignored) { }
-            localVideoView = null;
-        }
-        root.removeAllViews();
-        root.setBackgroundColor(Color.BLACK);
-
-        VideoView player = new VideoView(this);
-        localVideoView = player;
-        FrameLayout.LayoutParams playerParams = new FrameLayout.LayoutParams(-1, -1);
-        playerParams.topMargin = dp(56);
-        root.addView(player, playerParams);
-
-        MediaController controls = new MediaController(this);
-        controls.setAnchorView(player);
-        player.setMediaController(controls);
-        player.setOnErrorListener((mediaPlayer, what, extra) -> {
-            Toast.makeText(this,
-                    "Não foi possível reproduzir este MP4. Confira se o arquivo foi importado por completo.",
-                    Toast.LENGTH_LONG).show();
-            return true;
-        });
-        player.setOnPreparedListener(mediaPlayer -> {
-            mediaPlayer.setLooping(false);
-            player.start();
-            enterImmersive();
-        });
-
-        LinearLayout topBar = new LinearLayout(this);
-        topBar.setOrientation(LinearLayout.HORIZONTAL);
-        topBar.setGravity(Gravity.CENTER_VERTICAL);
-        topBar.setPadding(dp(18), 0, dp(18), 0);
-        topBar.setBackgroundColor(Color.rgb(22, 23, 27));
-        TextView back = label("‹  VOLTAR AOS VÍDEOS", 13, TEXT, true);
-        back.setGravity(Gravity.CENTER_VERTICAL);
-        back.setContentDescription("Voltar para a lista de vídeos");
-        back.setOnClickListener(v -> {
-            showCollection(false, true);
-            enterImmersive();
-        });
-        topBar.addView(back, new LinearLayout.LayoutParams(-1, -1));
-        videoTopBar = topBar;
-        root.addView(topBar, new FrameLayout.LayoutParams(-1, dp(56), Gravity.TOP));
-
-        player.setVideoPath(video.getAbsolutePath());
-        enterImmersive();
+        startActivity(player);
     }
 
     private void hideCustomVideoView(boolean notifyPlayer) {
@@ -1198,7 +1151,6 @@ public final class MainActivity extends Activity {
 
     @Override @SuppressWarnings("deprecation") public void onBackPressed() {
         if (videoCustomView != null) { hideCustomVideoView(true); return; }
-        if (videoOpen) { showCollection(false, true); enterImmersive(); return; }
         if (gameOpen) { showCollection(); enterImmersive(); return; }
         super.onBackPressed();
     }
@@ -1206,17 +1158,9 @@ public final class MainActivity extends Activity {
         super.onResume();
         enterImmersive();
         if (webView != null) webView.onResume();
-        if (resumeVideoAfterPause && localVideoView != null) {
-            resumeVideoAfterPause = false;
-            localVideoView.start();
-        }
     }
     @Override protected void onPause() {
         if (webView != null) webView.onPause();
-        if (localVideoView != null && localVideoView.isPlaying()) {
-            resumeVideoAfterPause = true;
-            localVideoView.pause();
-        }
         super.onPause();
     }
 }

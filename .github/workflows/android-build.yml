@@ -45,7 +45,16 @@ jobs:
           grep -q 'addAlgorithomusExitButton' app/src/main/java/br/com/colecaocf/MainActivity.java
           grep -q 'REQUEST_IMPORT_OFFLINE_VIDEO' app/src/main/java/br/com/colecaocf/MainActivity.java
           grep -q 'ACTION_OPEN_DOCUMENT' app/src/main/java/br/com/colecaocf/MainActivity.java
-          grep -q 'setVideoPath(video.getAbsolutePath())' app/src/main/java/br/com/colecaocf/MainActivity.java
+          test -f app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
+          grep -q 'androidx.media3:media3-exoplayer' app/build.gradle
+          grep -q 'PlaybackParameters' app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
+          grep -q 'SCREEN_ORIENTATION_SENSOR_LANDSCAPE' app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
+          grep -q 'RESIZE_MODE_FIT' app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
+          grep -Fq '(PlayerView.ControllerVisibilityListener)' app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
+          if grep -Eq 'import android\\.widget\\.VideoView;|new VideoView\\(|setVideoPath\\(' app/src/main/java/br/com/colecaocf/MainActivity.java; then
+            echo "::error::O player antigo VideoView não pode ser usado na aba de vídeos."
+            exit 1
+          fi
           if grep -q 'youtube-nocookie.com/embed/' app/src/main/java/br/com/colecaocf/MainActivity.java; then
             echo "::error::A aba de vídeos não pode voltar a depender do player incorporado do YouTube."
             exit 1
@@ -59,6 +68,32 @@ jobs:
           test -f tools/mirror_site.py
           test -f updates/latest.json
           test -f updates/latest.json.sig.b64
+
+      - name: Validate bundled MP4 videos before publishing from main
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for video in app/src/main/assets/videos/video-{1,2,3}.mp4; do
+            if [ ! -s "$video" ]; then
+              echo "::error::Vídeo pré-instalado ausente ou vazio: $video"
+              missing=1
+              continue
+            fi
+            size="$(stat -c%s "$video")"
+            if [ "$size" -le 1048576 ]; then
+              echo "::error::Vídeo pré-instalado incompleto (menos de 1 MiB): $video"
+              missing=1
+            else
+              echo "OK: $video ($size bytes)"
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::A publicação está bloqueada até os três MP4s originais serem adicionados em app/src/main/assets/videos/."
+            exit 1
+          fi
+          echo "Os três vídeos estão presentes e prontos para serem empacotados no APK."
 
       - name: Reconstruct and validate the two original games
         run: |
@@ -168,9 +203,30 @@ jobs:
         if: env.CF_STABLE_SIGNING_AVAILABLE == 'true'
         run: gradle --no-daemon :app:assembleRelease :app:bundleRelease
 
-      - name: Build development APK when permanent signature is not configured
+      - name: Build non-debuggable development distribution APK when permanent signature is not configured
         if: env.CF_STABLE_SIGNING_AVAILABLE != 'true'
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon :app:assembleRelease
+
+      - name: Re-sign non-debuggable development distribution APK with v1, v2 and v3 schemes
+        if: env.CF_STABLE_SIGNING_AVAILABLE != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+          APK="app/build/outputs/apk/release/app-release.apk"
+          RESIGNED="$RUNNER_TEMP/CFA-Android-1.2.16-debug-distribution-signed.apk"
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks app/cfa-development.jks \
+            --ks-key-alias cfa-development \
+            --ks-pass pass:CFA-Public-Debug-2026 \
+            --key-pass pass:CFA-Public-Debug-2026 \
+            --min-sdk-version 1 \
+            --max-sdk-version 10000 \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --out "$RESIGNED" "$APK"
+          mv "$RESIGNED" "$APK"
 
       - name: Verify APK signature, package metadata, and launcher icon
         shell: bash
@@ -181,12 +237,19 @@ jobs:
             APK="app/build/outputs/apk/release/app-release.apk"
             EXPECTED_ID="br.com.cfa"
           else
-            APK="app/build/outputs/apk/debug/app-debug.apk"
+            APK="app/build/outputs/apk/release/app-release.apk"
             EXPECTED_ID="br.com.cfa.debug"
           fi
           test -s "$APK"
           SIGNATURE_INFO="$("$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK")"
           printf '%s\\n' "$SIGNATURE_INFO"
+          # Check JAR/v1 in its legacy verification range separately. The app manifest
+          # still requires API 24+, where Android verifies the APK v2/v3 signing block.
+          LEGACY_SIGNATURE_INFO="$("$BUILD_TOOLS/apksigner" verify --verbose --min-sdk-version 1 --max-sdk-version 23 "$APK")"
+          printf '%s\\n' "$LEGACY_SIGNATURE_INFO" | grep -F "Verified using v1 scheme (JAR signing): true"
+          printf '%s\\n' "$SIGNATURE_INFO" | grep -F "Verified using v2 scheme (APK Signature Scheme v2): true"
+          printf '%s\\n' "$SIGNATURE_INFO" | grep -F "Verified using v3 scheme (APK Signature Scheme v3): true"
+          "$BUILD_TOOLS/zipalign" -c -v 4 "$APK"
           if [ "$CF_STABLE_SIGNING_AVAILABLE" != "true" ]; then
             printf '%s\\n' "$SIGNATURE_INFO" | grep -F "a2d3deec433e0563e2180aa9364b8560018cfc6884749e8fbe33d025ab44d28b"
           fi
@@ -195,11 +258,38 @@ jobs:
           printf '%s\\n' "$BADGING" | grep -F "package: name='$EXPECTED_ID'"
           printf '%s\\n' "$BADGING" | grep -E "application:.*icon="
           printf '%s\\n' "$BADGING" | grep -F "launchable-activity:"
-          unzip -Z1 "$APK" | grep -Fx "res/mipmap-anydpi-v26/ic_launcher.xml"
-          unzip -Z1 "$APK" | grep -E "^res/mipmap-nodpi(-v[0-9]+)?/ic_launcher\\.webp$"
-          unzip -Z1 "$APK" | grep -Fx "res/drawable/ic_launcher_foreground.xml"
-          unzip -Z1 "$APK" | grep -E "^res/drawable-nodpi(-v[0-9]+)?/ic_launcher_cfa\\.webp$"
-          echo "APK assinado, pacote e ícone adaptativo com margem segura validados."
+          APK_ENTRIES="$(unzip -Z1 "$APK")"
+          ICON_PATH="$(printf '%s\\n' "$BADGING" | sed -n "s/.*application:.*icon='\\([^']*\\)'.*/\\1/p" | head -n 1)"
+          test -n "$ICON_PATH"
+          printf '%s\\n' "$APK_ENTRIES" | grep -Fx "$ICON_PATH"
+          # Release resource optimisation can rename the compiled icon resource.
+          # Verify the actual resource referenced by the binary manifest.
+          echo "Launcher icon resource present in APK: $ICON_PATH"
+          echo "APK assinado, pacote e ícone adaptativo validados."
+
+
+      - name: Enable KVM acceleration for Android emulator
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+            ls -l /dev/kvm
+          else
+            echo "::warning::/dev/kvm não disponível; o emulador poderá usar aceleração por software."
+          fi
+
+      - name: Install APK in clean Android 14 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          disable-linux-hw-accel: false
+          emulator-boot-timeout: 600
+          script: bash tools/install_apk_emulator.sh
 
       - name: Compose artifact name from versionName
         run: |
@@ -260,12 +350,12 @@ jobs:
             app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
 
-      - name: Upload development APK while permanent signature is pending
+      - name: Upload non-debuggable development distribution APK while permanent signature is pending
         if: env.CF_STABLE_SIGNING_AVAILABLE != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.CF_ARTIFACT_NAME }}
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
 
       - name: Publish APK in the versions menu (permanent download link)
@@ -282,7 +372,7 @@ jobs:
             NOTES="APK assinado com o certificado permanente C-F-A. Instalacao direta."
             PRE=""
           else
-            APK="app/build/outputs/apk/debug/app-debug.apk"
+            APK="app/build/outputs/apk/release/app-release.apk"
             TAG="v${version}-debug"
             FILE="CFA-Android-${version}-debug.apk"
             TITLE="C-F-A v${version} (development build)"

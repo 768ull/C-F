@@ -10,8 +10,8 @@ android {
         applicationId "br.com.cfa"
         minSdk 24
         targetSdk 35
-        versionCode 24
-        versionName "1.2.14"
+        versionCode 26
+        versionName "1.2.16"
     }
 
     signingConfigs {
@@ -22,6 +22,11 @@ android {
             storePassword "CFA-Public-Debug-2026"
             keyAlias "cfa-development"
             keyPassword "CFA-Public-Debug-2026"
+            // Sign with both legacy JAR (v1) and APK Signature (v2/v3) schemes
+            // for wider compatibility with OEM package installers.
+            enableV1Signing true
+            enableV2Signing true
+            enableV3Signing true
         }
         if (System.getenv("CF_ANDROID_KEYSTORE_PATH")) {
             stable {
@@ -29,6 +34,9 @@ android {
                 storePassword System.getenv("CF_ANDROID_KEYSTORE_PASSWORD")
                 keyAlias System.getenv("CF_ANDROID_KEY_ALIAS") ?: "cf-release"
                 keyPassword System.getenv("CF_ANDROID_KEY_PASSWORD")
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
             }
         }
     }
@@ -47,6 +55,12 @@ android {
             minifyEnabled false
             if (System.getenv("CF_ANDROID_KEYSTORE_PATH")) {
                 signingConfig signingConfigs.stable
+            } else {
+                // Distributable development package: same .debug ID/certificate,
+                // but not marked debuggable so OEM file installers can sideload it.
+                signingConfig signingConfigs.development
+                applicationIdSuffix ".debug"
+                versionNameSuffix "-debug"
             }
         }
     }
@@ -59,6 +73,11 @@ android {
 
 dependencies {
     implementation "androidx.webkit:webkit:1.18.0"
+
+    // Player open source (Apache 2.0): controles nativos, tela cheia e velocidade.
+    def media3Version = "1.11.1"
+    implementation "androidx.media3:media3-exoplayer:$media3Version"
+    implementation "androidx.media3:media3-ui:$media3Version"
 }
 
 def gamePartsDir = file("src/main/assets/bundle_parts")

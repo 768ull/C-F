@@ -34,6 +34,10 @@ No Frutris, o botão SAIR fica em uma pequena faixa superior, sem cobrir o paine
 
 A tela inicial exibe o placar geral, que soma os pontos de Frutris e Cobrinha separadamente. Cada incremento de pontuação é recebido pelo aplicativo uma única vez e gravado em SharedPreferences. Os jogos também mantêm recordes e configurações no armazenamento local do WebView (DOM Storage/localStorage). O backup Android está habilitado para os dados compatíveis.
 
+## Player de vídeos offline
+
+A aba VÍDEOS usa AndroidX Media3/ExoPlayer 1.11.1 (Apache License 2.0), com vídeo em tela inteira, orientação automática a partir da proporção do arquivo, controle de velocidade, progresso, avanço e retrocesso. Os três arquivos MP4 devem estar em `app/src/main/assets/videos/video-1.mp4`, `video-2.mp4` e `video-3.mp4`; assim, ficam dentro do APK e não exigem importação manual. O seletor de arquivos continua disponível para substituir opcionalmente um dos vídeos por um arquivo local.
+
 ## Simulador Algorithomus (híbrido: local + online)
 
 A coleção mantém três opções separadas: Frutris, Cobrinha e **Simulador completo** (o telefone interativo Algorithomus). O simulador roda no WebView nativo, sem abrir navegador externo. HTML, CSS, JavaScript, imagens, áudios e vídeos são servidos primeiro do espelho incorporado no APK, então a interface e os recursos estáticos disponíveis continuam abrindo sem internet. Com uma conexão validada, as chamadas dinâmicas `/api/` seguem para `https://algorithomus.com.br` por HTTPS, no mesmo contexto de origem e com cookies reais. Somente o domínio original do jogo é autorizado para tráfego do simulador; demais destinos externos continuam bloqueados.
