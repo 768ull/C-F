@@ -13,8 +13,25 @@ echo "APK selecionado: $APK"
 echo "Pacote esperado: $PACKAGE"
 test -s "$APK"
 
-echo "Instalando no Android Emulator..."
-adb install -r "$APK"
+adb wait-for-device
+BOOT_STATUS="$(adb shell getprop sys.boot_completed | tr -d '\r')"
+if [[ "$BOOT_STATUS" != "1" ]]; then
+  echo "::error::O emulador Android não terminou a inicialização (sys.boot_completed=$BOOT_STATUS)."
+  exit 1
+fi
+
+echo "Instalando no Android Emulator (limite de 120 segundos)..."
+if ! timeout 120s adb install -r "$APK"; then
+  echo "::error::O Android PackageManager rejeitou ou não concluiu a instalação do APK."
+  echo "Informações do dispositivo:"
+  adb shell getprop ro.build.version.release || true
+  adb shell getprop ro.build.version.sdk || true
+  echo "Estado do pacote:"
+  adb shell dumpsys package "$PACKAGE" 2>&1 | tail -n 80 || true
+  echo "Eventos recentes do instalador:"
+  adb logcat -d -t 600 2>&1 | grep -iE 'PackageManager|PackageInstaller|INSTALL_FAILED|INSTALL_PARSE_FAILED|parse.*package|signature|verif' | tail -n 100 || true
+  exit 1
+fi
 
 echo "Confirmando pacote instalado..."
 adb shell pm path "$PACKAGE"
