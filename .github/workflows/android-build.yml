@@ -50,6 +50,7 @@ jobs:
           grep -q 'PlaybackParameters' app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
           grep -q 'SCREEN_ORIENTATION_SENSOR_LANDSCAPE' app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
           grep -q 'RESIZE_MODE_FIT' app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
+          grep -Fq '(PlayerView.ControllerVisibilityListener)' app/src/main/java/br/com/colecaocf/LocalVideoPlayerActivity.java
           if grep -Eq 'import android\\.widget\\.VideoView;|new VideoView\\(|setVideoPath\\(' app/src/main/java/br/com/colecaocf/MainActivity.java; then
             echo "::error::O player antigo VideoView não pode ser usado na aba de vídeos."
             exit 1
