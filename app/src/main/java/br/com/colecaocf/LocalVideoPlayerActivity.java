@@ -101,7 +101,7 @@ public final class LocalVideoPlayerActivity extends Activity {
         topParams.rightMargin = dp(10);
         topParams.topMargin = dp(10);
         root.addView(topBar, topParams);
-        playerView.setControllerVisibilityListener(visibility -> topBar.setVisibility(visibility));
+        playerView.setControllerVisibilityListener((PlayerView.ControllerVisibilityListener) visibility -> topBar.setVisibility(visibility));
 
         setContentView(root);
 
