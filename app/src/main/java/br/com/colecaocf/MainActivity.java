@@ -577,7 +577,7 @@ public final class MainActivity extends Activity {
             supportCard.addView(supportTitle, new LinearLayout.LayoutParams(-1, dp(30)));
             TextView supportSubtitle = label("Escolha uma opção para conhecer, acompanhar e participar.", 12, MUTED, false);
             supportSubtitle.setMaxLines(3);
-            supportCard.addView(supportSubtitle, new LinearLayout.LayoutParams(-1, dp(46)));
+            supportCard.addView(supportSubtitle, new LinearLayout.LayoutParams(-1, -2));
 
             supportCard.addView(supportLinkItem(
                     "CANAL NO YOUTUBE",
@@ -615,7 +615,7 @@ public final class MainActivity extends Activity {
                     "https://mundotorajo.com.br/ingressos/"));
 
             TextView note = label("Os links abrem fora do aplicativo.", 10, MUTED, false);
-            LinearLayout.LayoutParams noteParams = new LinearLayout.LayoutParams(-1, dp(34));
+            LinearLayout.LayoutParams noteParams = new LinearLayout.LayoutParams(-1, -2);
             noteParams.topMargin = dp(12);
             supportCard.addView(note, noteParams);
 
@@ -632,7 +632,7 @@ public final class MainActivity extends Activity {
             qrCard.addView(qrTitle, new LinearLayout.LayoutParams(-1, dp(30)));
             TextView qrSubtitle = label("Mostre o código para outro celular escanear ou salve a imagem.", 12, MUTED, false);
             qrSubtitle.setMaxLines(3);
-            qrCard.addView(qrSubtitle, new LinearLayout.LayoutParams(-1, dp(46)));
+            qrCard.addView(qrSubtitle, new LinearLayout.LayoutParams(-1, -2));
 
             qrCard.addView(qrItem("CANAL NO YOUTUBE", "QR code do canal Torajo", "TORAJO", "https://youtube.com/@torajo"));
             qrCard.addView(supportDivider());
@@ -647,24 +647,45 @@ public final class MainActivity extends Activity {
             qrCard.addView(qrItem("BAIXAR O APLICATIVO", "Outro celular escaneia e baixa o C-F-A", "CFA", "https://github.com/768ull/C-F/releases/latest"));
 
             TextView qrNote = label("Aponte a câmera de outro celular para o código mostrado na tela.", 10, MUTED, false);
-            LinearLayout.LayoutParams qrNoteParams = new LinearLayout.LayoutParams(-1, dp(34));
+            LinearLayout.LayoutParams qrNoteParams = new LinearLayout.LayoutParams(-1, -2);
             qrNoteParams.topMargin = dp(12);
             qrCard.addView(qrNote, qrNoteParams);
         } else if (videosTab) {
+            TextView youtubeNote = label(
+                    "OS TRÊS VÍDEOS DO CANAL ASSISTEM AQUI DENTRO, PELO PLAYER OFICIAL DO YOUTUBE.",
+                    12, MUTED, false);
+            youtubeNote.setMaxLines(3);
+            LinearLayout.LayoutParams youtubeNoteParams = new LinearLayout.LayoutParams(-1, -2);
+            youtubeNoteParams.bottomMargin = dp(12);
+            body.addView(youtubeNote, youtubeNoteParams);
+            body.addView(youtubeCard("VÍDEO 1", "oTXwEcxFlUg"));
+            View youtubeGap1 = new View(this);
+            body.addView(youtubeGap1, new LinearLayout.LayoutParams(1, dp(14)));
+            body.addView(youtubeCard("VÍDEO 2", "VVeCPiyARPk"));
+            View youtubeGap2 = new View(this);
+            body.addView(youtubeGap2, new LinearLayout.LayoutParams(1, dp(14)));
+            body.addView(youtubeCard("VÍDEO 3", "LDzCd4y4Iv8"));
+
+            TextView offlineTitle = label("SEUS VÍDEOS IMPORTADOS (MP4)", 12, TEXT, true);
+            offlineTitle.setLetterSpacing(.05f);
+            LinearLayout.LayoutParams offlineTitleParams = new LinearLayout.LayoutParams(-1, -2);
+            offlineTitleParams.topMargin = dp(18);
+            offlineTitleParams.bottomMargin = dp(4);
+            body.addView(offlineTitle, offlineTitleParams);
             TextView offlineNote = label(
                     "IMPORTE CADA MP4 UMA VEZ. Os arquivos ficam salvos no C-F-A e podem ser assistidos sem YouTube e sem internet.",
                     12, MUTED, false);
             offlineNote.setMaxLines(4);
-            LinearLayout.LayoutParams offlineNoteParams = new LinearLayout.LayoutParams(-1, dp(58));
+            LinearLayout.LayoutParams offlineNoteParams = new LinearLayout.LayoutParams(-1, -2);
             offlineNoteParams.bottomMargin = dp(12);
             body.addView(offlineNote, offlineNoteParams);
-            body.addView(videoCard("VÍDEO 1", 1));
+            body.addView(videoCard("MEU VÍDEO 1", 1));
             View videoGap1 = new View(this);
             body.addView(videoGap1, new LinearLayout.LayoutParams(1, dp(14)));
-            body.addView(videoCard("VÍDEO 2", 2));
+            body.addView(videoCard("MEU VÍDEO 2", 2));
             View videoGap2 = new View(this);
             body.addView(videoGap2, new LinearLayout.LayoutParams(1, dp(14)));
-            body.addView(videoCard("VÍDEO 3", 3));
+            body.addView(videoCard("MEU VÍDEO 3", 3));
         } else {
             LinearLayout scoreCard = new LinearLayout(this);
             scoreCard.setOrientation(LinearLayout.VERTICAL);
@@ -748,6 +769,145 @@ public final class MainActivity extends Activity {
 
     private File offlineVideoFile(int slot) {
         return new File(new File(getFilesDir(), "cfa-offline-videos"), "video-" + slot + ".mp4");
+    }
+
+    /** Cartão dos vídeos oficiais do canal: abre o player incorporado do YouTube. */
+    private View youtubeCard(String title, String videoId) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setPadding(dp(16), dp(14), dp(16), dp(14));
+        card.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(35, 255, 255, 255)),
+                rounded(CARD, 20, Color.rgb(47, 49, 55)), null));
+        card.setClickable(true);
+        card.setFocusable(true);
+        card.setContentDescription("Assistir " + title + " no YouTube dentro do C-F-A");
+
+        TextView play = label("▶", 24, Color.WHITE, true);
+        play.setGravity(Gravity.CENTER);
+        play.setBackground(rounded(Color.rgb(211, 47, 47), 16, Color.TRANSPARENT));
+        LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(dp(58), dp(58));
+        playParams.rightMargin = dp(16);
+        card.addView(play, playParams);
+
+        LinearLayout labels = new LinearLayout(this);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        labels.setGravity(Gravity.CENTER_VERTICAL);
+        labels.addView(label(title, 17, TEXT, true),
+                new LinearLayout.LayoutParams(-1, dp(28)));
+        labels.addView(label("PLAYER OFICIAL DO YOUTUBE • ASSISTE AQUI", 10, Color.rgb(255, 138, 128), true),
+                new LinearLayout.LayoutParams(-1, dp(26)));
+        card.addView(labels, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        TextView arrow = label("›", 26, MUTED, false);
+        arrow.setGravity(Gravity.CENTER);
+        card.addView(arrow, new LinearLayout.LayoutParams(dp(24), dp(42)));
+        card.setOnClickListener(v -> openYouTubeVideo(videoId));
+        return card;
+    }
+
+    /**
+     * Abre um vídeo do YouTube dentro do aplicativo com o player incorporado
+     * oficial (IFrame), que não exige chave de API. É a única forma aceita
+     * pelos termos do YouTube: os players nativos (MediaPlayer/Media3) não
+     * reproduzem vídeos do serviço, porque o YouTube não publica um endereço
+     * direto do arquivo de vídeo.
+     */
+    private void openYouTubeVideo(String videoId) {
+        if (videoCustomView != null) hideCustomVideoView(true);
+        gameOpen = false;
+        videoOpen = true;
+        activeGameId = null;
+        resumeVideoAfterPause = false;
+        synchronized (this) { scoreSession++; }
+        if (webView != null) {
+            webView.stopLoading();
+            root.removeView(webView);
+            webView.destroy();
+            webView = null;
+        }
+        releaseVideoPlayer();
+        root.removeAllViews();
+        root.setBackgroundColor(Color.BLACK);
+
+        webView = new WebView(this);
+        webView.setBackgroundColor(Color.BLACK);
+        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        webView.setVerticalScrollBarEnabled(false);
+        webView.setHorizontalScrollBarEnabled(false);
+        WebSettings settings = webView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setDatabaseEnabled(true);
+        settings.setAllowFileAccess(false);
+        settings.setAllowContentAccess(false);
+        settings.setSupportZoom(false);
+        settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
+        settings.setTextZoom(100);
+        settings.setMediaPlaybackRequiresUserGesture(true);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        settings.setLoadWithOverviewMode(true);
+        settings.setUseWideViewPort(true);
+        settings.setSupportMultipleWindows(false);
+        settings.setJavaScriptCanOpenWindowsAutomatically(false);
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+
+        webView.setWebViewClient(new WebViewClient() {
+            @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                String scheme = request.getUrl().getScheme();
+                return !("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme));
+            }
+            @Override public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                String scheme = Uri.parse(url).getScheme();
+                return !("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme));
+            }
+        });
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override public void onShowCustomView(View view, WebChromeClient.CustomViewCallback callback) {
+                if (videoCustomView != null) {
+                    try { callback.onCustomViewHidden(); } catch (Exception ignored) { }
+                    return;
+                }
+                videoCustomView = view;
+                videoCustomViewCallback = callback;
+                if (videoTopBar != null) videoTopBar.setVisibility(View.GONE);
+                root.setBackgroundColor(Color.BLACK);
+                root.addView(view, new FrameLayout.LayoutParams(-1, -1));
+                enterImmersive();
+            }
+            @Override public void onHideCustomView() {
+                hideCustomVideoView(true);
+            }
+        });
+
+        FrameLayout.LayoutParams playerParams = new FrameLayout.LayoutParams(-1, -1);
+        playerParams.topMargin = dp(56);
+        root.addView(webView, playerParams);
+
+        LinearLayout topBar = new LinearLayout(this);
+        topBar.setOrientation(LinearLayout.HORIZONTAL);
+        topBar.setGravity(Gravity.CENTER_VERTICAL);
+        topBar.setPadding(dp(18), 0, dp(18), 0);
+        topBar.setBackgroundColor(Color.rgb(22, 23, 27));
+        TextView back = label("‹  VOLTAR AOS VÍDEOS", 13, TEXT, true);
+        back.setGravity(Gravity.CENTER_VERTICAL);
+        back.setContentDescription("Voltar para a lista de vídeos");
+        back.setOnClickListener(v -> {
+            showCollection(false, true);
+            enterImmersive();
+        });
+        topBar.addView(back, new LinearLayout.LayoutParams(-1, -1));
+        videoTopBar = topBar;
+        root.addView(topBar, new FrameLayout.LayoutParams(-1, dp(52), Gravity.TOP));
+
+        String embedUrl = "https://www.youtube-nocookie.com/embed/" + videoId
+                + "?autoplay=0&controls=1&playsinline=1&rel=0&hl=pt-BR&fs=1";
+        // O YouTube exige cabeçalho Referer em players incorporados dentro de WebView.
+        Map<String, String> playerHeaders = Collections.singletonMap(
+                "Referer", "https://" + HOST + "/cfa-android/");
+        webView.loadUrl(embedUrl, playerHeaders);
+        enterImmersive();
     }
 
     private View videoCard(String title, int slot) {
@@ -1192,18 +1352,19 @@ public final class MainActivity extends Activity {
 
         TextView heading = label(title, 15, TEXT, true);
         heading.setGravity(Gravity.CENTER);
-        box.addView(heading, new LinearLayout.LayoutParams(-1, dp(30)));
+        box.addView(heading, new LinearLayout.LayoutParams(-1, -2));
 
         ImageView image = new ImageView(this);
         image.setImageBitmap(qrBitmap(url, 12));
         image.setBackground(rounded(Color.WHITE, 14, Color.TRANSPARENT));
         image.setPadding(dp(6), dp(6), dp(6), dp(6));
-        box.addView(image, new LinearLayout.LayoutParams(dp(300), dp(300)));
+        int qrSize = Math.min(dp(300), Math.max(dp(220), getResources().getDisplayMetrics().widthPixels - dp(52)));
+        box.addView(image, new LinearLayout.LayoutParams(qrSize, qrSize));
 
         TextView hint = label("Aponte a câmera de outro celular para o código.", 11, MUTED, false);
         hint.setGravity(Gravity.CENTER);
         hint.setMaxLines(2);
-        LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-1, dp(34));
+        LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-1, -2);
         hintParams.topMargin = dp(8);
         box.addView(hint, hintParams);
 
@@ -1219,7 +1380,8 @@ public final class MainActivity extends Activity {
         save.setOnClickListener(v -> {
             saveQrImage(name, url);
         });
-        LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(-1, dp(46));
+        save.setMinimumHeight(dp(46));
+        LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(-1, -2);
         saveParams.topMargin = dp(10);
         box.addView(save, saveParams);
 
@@ -1229,14 +1391,15 @@ public final class MainActivity extends Activity {
         close.setClickable(true);
         close.setFocusable(true);
         close.setOnClickListener(v -> dialog.dismiss());
-        box.addView(close, new LinearLayout.LayoutParams(-2, dp(38)));
+        close.setMinimumHeight(dp(38));
+        box.addView(close, new LinearLayout.LayoutParams(-2, -2));
 
         dialog.setContentView(box);
         dialog.show();
         Window window = dialog.getWindow();
         if (window != null) {
             window.setBackgroundDrawable(new ColorDrawable(Color.argb(190, 0, 0, 0)));
-            window.setLayout(dp(342), -2);
+            window.setLayout(Math.min(dp(342), getResources().getDisplayMetrics().widthPixels - dp(24)), -2);
         }
     }
 
@@ -1291,7 +1454,7 @@ public final class MainActivity extends Activity {
                     bitmap.compress(Bitmap.CompressFormat.PNG, 100, output);
                     output.flush();
                 }
-                Toast.makeText(this, "QR CODE SALVO EM: " + file.getAbsolutePath(), Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "QR CODE SALVO NA PASTA DE IMAGENS DO C-F-A.", Toast.LENGTH_LONG).show();
             }
         } catch (Exception error) {
             Toast.makeText(this, "Não foi possível salvar a imagem do QR code.", Toast.LENGTH_LONG).show();
