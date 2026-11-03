@@ -207,6 +207,25 @@ jobs:
         if: env.CF_STABLE_SIGNING_AVAILABLE != 'true'
         run: gradle --no-daemon :app:assembleDebug
 
+      - name: Re-sign development APK with explicit v1, v2 and v3 schemes
+        if: env.CF_STABLE_SIGNING_AVAILABLE != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          RESIGNED="$RUNNER_TEMP/CFA-Android-1.2.16-debug-signed.apk"
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks app/cfa-development.jks \
+            --ks-key-alias cfa-development \
+            --ks-pass pass:CFA-Public-Debug-2026 \
+            --key-pass pass:CFA-Public-Debug-2026 \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --out "$RESIGNED" "$APK"
+          mv "$RESIGNED" "$APK"
+
       - name: Verify APK signature, package metadata, and launcher icon
         shell: bash
         run: |
