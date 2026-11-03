@@ -264,6 +264,17 @@ jobs:
           unzip -Z1 "$APK" | grep -E "^res/drawable-nodpi(-v[0-9]+)?/ic_launcher_cfa\\.webp$"
           echo "APK assinado, pacote e ícone adaptativo com margem segura validados."
 
+      - name: Enable KVM acceleration for Android emulator
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+            ls -l /dev/kvm
+          else
+            echo "::warning::/dev/kvm não disponível; o emulador poderá usar aceleração por software."
+          fi
+
       - name: Install APK in clean Android 14 emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -272,6 +283,8 @@ jobs:
           arch: x86_64
           profile: pixel_2
           disable-animations: true
+          disable-linux-hw-accel: false
+          emulator-boot-timeout: 600
           script: |
             set -euo pipefail
             if [ "$CF_STABLE_SIGNING_AVAILABLE" = "true" ]; then
