@@ -848,7 +848,7 @@ public final class MainActivity extends Activity {
             @Override public void onSurfaceTextureUpdated(SurfaceTexture texture) { }
         });
         root.addView(surface, new FrameLayout.LayoutParams(-1, -1));
-        surface.setOnClickListener(v -> showVideoUi());
+        surface.setOnClickListener(v -> toggleVideoUi());
 
         MediaController controls = new MediaController(this);
         videoControls = controls;
@@ -897,6 +897,20 @@ public final class MainActivity extends Activity {
 
     private String scaleToggleText() {
         return videoFillScale ? "AJUSTAR SEM CORTAR" : "PREENCHER A TELA";
+    }
+
+    /** Um toque na tela alterna os controles: mostra se estiverem ocultos e oculta imediatamente se estiverem visíveis. */
+    private void toggleVideoUi() {
+        boolean visible = videoTopBar != null && videoTopBar.getVisibility() == View.VISIBLE;
+        if (visible) {
+            if (videoTopBar != null) videoTopBar.setVisibility(View.GONE);
+            if (videoControls != null) {
+                try { videoControls.hide(); } catch (Exception ignored) { }
+            }
+            videoUiHandler.removeCallbacks(videoTopBarHider);
+            return;
+        }
+        showVideoUi();
     }
 
     /** Mostra os controles por alguns segundos, como um player de vídeo padrão. */
