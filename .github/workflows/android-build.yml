@@ -172,6 +172,42 @@ jobs:
         if: env.CF_STABLE_SIGNING_AVAILABLE != 'true'
         run: gradle --no-daemon :app:assembleDebug
 
+      - name: Align and re-sign APK with v1, v2 and v3 schemes
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+          if [ "$CF_STABLE_SIGNING_AVAILABLE" = "true" ]; then
+            APK="app/build/outputs/apk/release/app-release.apk"
+            KS="$CF_ANDROID_KEYSTORE_PATH"
+            KS_PASS_ARG="pass:$CF_ANDROID_KEYSTORE_PASSWORD"
+            ALIAS="$CF_ANDROID_KEY_ALIAS"
+            KEY_PASS_ARG="pass:$CF_ANDROID_KEY_PASSWORD"
+          else
+            APK="app/build/outputs/apk/debug/app-debug.apk"
+            KS="app/cfa-development.jks"
+            KS_PASS_ARG="pass:CFA-Public-Debug-2026"
+            ALIAS="cfa-development"
+            KEY_PASS_ARG="pass:CFA-Public-Debug-2026"
+          fi
+          test -s "$APK"
+          ALIGNED="$RUNNER_TEMP/apk-aligned.apk"
+          RESIGNED="$RUNNER_TEMP/apk-resigned.apk"
+          "$BUILD_TOOLS/zipalign" -f -p 4 "$APK" "$ALIGNED"
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks "$KS" \
+            --ks-key-alias "$ALIAS" \
+            --ks-pass "$KS_PASS_ARG" \
+            --key-pass "$KEY_PASS_ARG" \
+            --min-sdk-version 1 \
+            --max-sdk-version 10000 \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --out "$RESIGNED" "$ALIGNED"
+          mv "$RESIGNED" "$APK"
+          echo "APK alinhado e assinado com os esquemas v1, v2 e v3."
+
       - name: Verify APK signature, package metadata, and launcher icon
         shell: bash
         run: |
