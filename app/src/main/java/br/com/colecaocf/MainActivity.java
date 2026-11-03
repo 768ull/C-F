@@ -474,6 +474,10 @@ public final class MainActivity extends Activity {
     }
 
     private void showCollection() {
+        showCollection(false);
+    }
+
+    private void showCollection(boolean linksTab) {
         gameOpen = false;
         activeGameId = null;
         if (webView != null) {
@@ -490,10 +494,10 @@ public final class MainActivity extends Activity {
         scroll.setVerticalScrollBarEnabled(false);
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(24), dp(30), dp(24), dp(28));
+        body.setPadding(dp(24), dp(30), dp(24), dp(104));
         scroll.addView(body);
 
-        TextView eyebrow = label("COLEÇÃO DE JOGOS E APLICATIVOS", 11, MUTED, true);
+        TextView eyebrow = label(linksTab ? "APOIO E LINKS OFICIAIS" : "COLEÇÃO DE JOGOS E APLICATIVOS", 11, MUTED, true);
         eyebrow.setLetterSpacing(.16f);
         body.addView(eyebrow, new LinearLayout.LayoutParams(-1, dp(28)));
 
@@ -501,7 +505,7 @@ public final class MainActivity extends Activity {
         title.setLetterSpacing(-.04f);
         body.addView(title, new LinearLayout.LayoutParams(-1, dp(60)));
 
-        TextView subtitle = label("Três experiências. Uma coleção.", 15, MUTED, false);
+        TextView subtitle = label(linksTab ? "Acompanhe e apoie o Mundo Torajo." : "Três experiências. Uma coleção.", 15, MUTED, false);
         LinearLayout.LayoutParams sub = new LinearLayout.LayoutParams(-1, dp(32));
         sub.bottomMargin = dp(20);
         body.addView(subtitle, sub);
@@ -512,65 +516,71 @@ public final class MainActivity extends Activity {
         line.bottomMargin = dp(24);
         body.addView(accent, line);
 
-        LinearLayout scoreCard = new LinearLayout(this);
-        scoreCard.setOrientation(LinearLayout.VERTICAL);
-        scoreCard.setPadding(dp(18), dp(12), dp(18), dp(12));
-        scoreCard.setBackground(rounded(CARD, 18, Color.rgb(70, 61, 88)));
-        TextView scoreCaption = label("PLACAR GERAL E PROGRESSO DA HISTÓRIA", 9, MUTED, true);
-        scoreCaption.setLetterSpacing(.05f);
-        scoreCard.addView(scoreCaption, new LinearLayout.LayoutParams(-1, dp(20)));
-        scoreTotalView = label("0 PTS", 30, TEXT, true);
-        scoreCard.addView(scoreTotalView, new LinearLayout.LayoutParams(-1, dp(40)));
-        scoreDetailsView = label("", 10, MUTED, false);
-        scoreDetailsView.setMaxLines(3);
-        scoreDetailsView.setTextSize(9);
-        scoreDetailsView.setGravity(Gravity.CENTER_VERTICAL);
-        scoreCard.addView(scoreDetailsView, new LinearLayout.LayoutParams(-1, dp(48)));
-        scoreCard.setMinimumHeight(dp(132));
-        LinearLayout.LayoutParams scoreParams = new LinearLayout.LayoutParams(-1, -2);
-        scoreParams.bottomMargin = dp(18);
-        body.addView(scoreCard, scoreParams);
-        refreshScoreBoard();
+        if (linksTab) {
+            LinearLayout supportCard = new LinearLayout(this);
+            supportCard.setOrientation(LinearLayout.VERTICAL);
+            supportCard.setPadding(dp(16), dp(14), dp(16), dp(12));
+            supportCard.setBackground(rounded(CARD, 18, Color.rgb(70, 61, 88)));
+            body.addView(supportCard, new LinearLayout.LayoutParams(-1, -2));
 
-        body.addView(gameCard("Frutris", "Jogo de blocos · controles por gestos", "frutris.webp", "frutris", 0));
-        View gap = new View(this);
-        body.addView(gap, new LinearLayout.LayoutParams(1, dp(14)));
-        body.addView(gameCard("Cobrinha", "Jogo da cobrinha · deslize para direcionar", "cobrinha.webp", "cobrinha", 0));
-        View siteGap = new View(this);
-        body.addView(siteGap, new LinearLayout.LayoutParams(1, dp(14)));
-        body.addView(gameCard("Simulador completo", "Algorithomus · telefone interativo com todos os aplicativos", null, "algorithomus", R.drawable.ic_algorithomus));
+            TextView supportTitle = label("APOIE O TORAJO", 16, TEXT, true);
+            supportTitle.setLetterSpacing(.06f);
+            supportCard.addView(supportTitle, new LinearLayout.LayoutParams(-1, dp(30)));
+            TextView supportSubtitle = label("Escolha uma opção para conhecer, acompanhar e participar.", 12, MUTED, false);
+            supportSubtitle.setMaxLines(3);
+            supportCard.addView(supportSubtitle, new LinearLayout.LayoutParams(-1, dp(46)));
 
-        LinearLayout supportCard = new LinearLayout(this);
-        supportCard.setOrientation(LinearLayout.VERTICAL);
-        supportCard.setPadding(dp(14), dp(12), dp(14), dp(10));
-        supportCard.setBackground(rounded(CARD, 18, Color.rgb(70, 61, 88)));
-        LinearLayout.LayoutParams supportParams = new LinearLayout.LayoutParams(-1, -2);
-        supportParams.topMargin = dp(18);
-        supportParams.bottomMargin = dp(4);
-        body.addView(supportCard, supportParams);
+            supportCard.addView(supportLinkItem(
+                    "CANAL NO YOUTUBE",
+                    "Inscreva-se e acompanhe os vídeos",
+                    "https://youtube.com/@torajo?si=K1F2cw5ktRqczQt6"));
+            supportCard.addView(supportDivider());
+            supportCard.addView(supportLinkItem(
+                    "SITE OFICIAL",
+                    "Acesse o Mundo Torajo",
+                    "https://mundotorajo.com.br/?atualizar=1"));
+            supportCard.addView(supportDivider());
+            supportCard.addView(supportLinkItem(
+                    "INGRESSOS",
+                    "Confira eventos e ingressos",
+                    "https://mundotorajo.com.br/ingressos/"));
 
-        TextView supportTitle = label("APOIE O TORAJO", 12, TEXT, true);
-        supportTitle.setLetterSpacing(.1f);
-        supportCard.addView(supportTitle, new LinearLayout.LayoutParams(-1, dp(26)));
-        TextView supportSubtitle = label("Conheça, acompanhe e participe", 11, MUTED, false);
-        supportCard.addView(supportSubtitle, new LinearLayout.LayoutParams(-1, dp(22)));
+            TextView note = label("Os links abrem fora do aplicativo.", 10, MUTED, false);
+            LinearLayout.LayoutParams noteParams = new LinearLayout.LayoutParams(-1, dp(34));
+            noteParams.topMargin = dp(12);
+            supportCard.addView(note, noteParams);
+        } else {
+            LinearLayout scoreCard = new LinearLayout(this);
+            scoreCard.setOrientation(LinearLayout.VERTICAL);
+            scoreCard.setPadding(dp(18), dp(12), dp(18), dp(12));
+            scoreCard.setBackground(rounded(CARD, 18, Color.rgb(70, 61, 88)));
+            TextView scoreCaption = label("PLACAR GERAL E PROGRESSO DA HISTÓRIA", 9, MUTED, true);
+            scoreCaption.setLetterSpacing(.05f);
+            scoreCard.addView(scoreCaption, new LinearLayout.LayoutParams(-1, dp(20)));
+            scoreTotalView = label("0 PTS", 30, TEXT, true);
+            scoreCard.addView(scoreTotalView, new LinearLayout.LayoutParams(-1, dp(40)));
+            scoreDetailsView = label("", 10, MUTED, false);
+            scoreDetailsView.setMaxLines(3);
+            scoreDetailsView.setTextSize(9);
+            scoreDetailsView.setGravity(Gravity.CENTER_VERTICAL);
+            scoreCard.addView(scoreDetailsView, new LinearLayout.LayoutParams(-1, dp(48)));
+            scoreCard.setMinimumHeight(dp(132));
+            LinearLayout.LayoutParams scoreParams = new LinearLayout.LayoutParams(-1, -2);
+            scoreParams.bottomMargin = dp(18);
+            body.addView(scoreCard, scoreParams);
+            refreshScoreBoard();
 
-        supportCard.addView(supportLinkItem(
-                "CANAL NO YOUTUBE",
-                "Inscreva-se e acompanhe os vídeos",
-                "https://youtube.com/@torajo?si=K1F2cw5ktRqczQt6"));
-        supportCard.addView(supportDivider());
-        supportCard.addView(supportLinkItem(
-                "SITE OFICIAL",
-                "Acesse o Mundo Torajo",
-                "https://mundotorajo.com.br/?atualizar=1"));
-        supportCard.addView(supportDivider());
-        supportCard.addView(supportLinkItem(
-                "INGRESSOS",
-                "Confira eventos e ingressos",
-                "https://mundotorajo.com.br/ingressos/"));
+            body.addView(gameCard("Frutris", "Jogo de blocos · controles por gestos", "frutris.webp", "frutris", 0));
+            View gap = new View(this);
+            body.addView(gap, new LinearLayout.LayoutParams(1, dp(14)));
+            body.addView(gameCard("Cobrinha", "Jogo da cobrinha · deslize para direcionar", "cobrinha.webp", "cobrinha", 0));
+            View siteGap = new View(this);
+            body.addView(siteGap, new LinearLayout.LayoutParams(1, dp(14)));
+            body.addView(gameCard("Simulador completo", "Algorithomus · telefone interativo com todos os aplicativos", null, "algorithomus", R.drawable.ic_algorithomus));
+        }
 
-        TextView footer = label(assetsReady ? "TOQUE EM UM JOGO PARA ABRIR" : "NÃO FOI POSSÍVEL PREPARAR OS JOGOS",
+        TextView footer = label(linksTab ? "APOIE E ACOMPANHE O TORAJO" :
+                (assetsReady ? "TOQUE EM UM JOGO PARA ABRIR" : "NÃO FOI POSSÍVEL PREPARAR OS JOGOS"),
                 10, assetsReady ? MUTED : Color.rgb(255, 138, 128), true);
         footer.setGravity(Gravity.CENTER);
         footer.setLetterSpacing(.12f);
@@ -578,6 +588,42 @@ public final class MainActivity extends Activity {
         fp.topMargin = dp(22);
         body.addView(footer, fp);
         root.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
+
+        LinearLayout navigation = new LinearLayout(this);
+        navigation.setOrientation(LinearLayout.HORIZONTAL);
+        navigation.setGravity(Gravity.CENTER);
+        navigation.setPadding(dp(12), dp(8), dp(12), dp(8));
+        navigation.setBackgroundColor(Color.rgb(22, 23, 27));
+        FrameLayout.LayoutParams navigationParams = new FrameLayout.LayoutParams(
+                -1, dp(68), Gravity.BOTTOM);
+        root.addView(navigation, navigationParams);
+        navigation.addView(collectionTabButton("JOGOS", !linksTab, R.drawable.ic_launcher_cfa),
+                new LinearLayout.LayoutParams(0, -1, 1f));
+        navigation.addView(collectionTabButton("LINKS", linksTab, android.R.drawable.ic_menu_share),
+                new LinearLayout.LayoutParams(0, -1, 1f));
+    }
+
+    private View collectionTabButton(String title, boolean selected, int iconRes) {
+        LinearLayout tab = new LinearLayout(this);
+        tab.setOrientation(LinearLayout.HORIZONTAL);
+        tab.setGravity(Gravity.CENTER);
+        tab.setBackground(new RippleDrawable(
+                ColorStateList.valueOf(Color.argb(35, 255, 255, 255)),
+                rounded(selected ? Color.rgb(70, 61, 88) : Color.TRANSPARENT, 14, Color.TRANSPARENT),
+                null));
+        tab.setClickable(true);
+        tab.setFocusable(true);
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(iconRes);
+        icon.setColorFilter(selected ? TEXT : MUTED);
+        LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(22), dp(22));
+        iconParams.rightMargin = dp(8);
+        tab.addView(icon, iconParams);
+        TextView text = label(title, 12, selected ? TEXT : MUTED, true);
+        text.setGravity(Gravity.CENTER_VERTICAL);
+        tab.addView(text);
+        tab.setOnClickListener(v -> showCollection("LINKS".equals(title)));
+        return tab;
     }
 
     private View supportLinkItem(String title, String detail, String url) {
