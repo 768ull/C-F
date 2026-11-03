@@ -54,10 +54,8 @@ jobs:
           test -f app/src/main/java/io/nayuki/qrcodegen/QrCode.java
           test -f app/src/main/java/io/nayuki/qrcodegen/QrSegment.java
           grep -q 'showQrCode' app/src/main/java/br/com/colecaocf/MainActivity.java
-          if grep -q 'youtube-nocookie.com/embed/' app/src/main/java/br/com/colecaocf/MainActivity.java; then
-            echo "::error::A aba de vídeos não pode voltar a depender do player incorporado do YouTube."
-            exit 1
-          fi
+          grep -q 'youtubeCard' app/src/main/java/br/com/colecaocf/MainActivity.java
+          grep -q 'openYouTubeVideo' app/src/main/java/br/com/colecaocf/MainActivity.java
           test -f app/src/main/java/br/com/colecaocf/UpdateSignatureVerifier.java
           test -f app/src/main/assets/bundle_parts/00.b64
           test -f app/src/main/assets/bundle_parts/24.b64
