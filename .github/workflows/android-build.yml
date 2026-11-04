@@ -52,6 +52,7 @@ jobs:
           grep -q 'showQrCode' app/src/main/java/br/com/colecaocf/MainActivity.java
           grep -q 'youtubeCard' app/src/main/java/br/com/colecaocf/MainActivity.java
           grep -q 'openYouTubeVideo' app/src/main/java/br/com/colecaocf/MainActivity.java
+          grep -q 'openVideoAddressOutside' app/src/main/java/br/com/colecaocf/MainActivity.java
           test -f app/src/main/java/br/com/colecaocf/UpdateSignatureVerifier.java
           test -f app/src/main/assets/bundle_parts/00.b64
           test -f app/src/main/assets/bundle_parts/24.b64

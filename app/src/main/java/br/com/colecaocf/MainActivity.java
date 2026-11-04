@@ -813,13 +813,29 @@ public final class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
 
         webView.setWebViewClient(new WebViewClient() {
+            // Somente o próprio player incorporado permanece dentro do aplicativo.
+            // A página completa do YouTube (tocando no título do vídeo) não é
+            // exibida no WebView porque, no modo retrato, ela aparece reduzida
+            // como numa tela de computador, com o vídeo pequeno no canto.
+            // O player incorporado mostra o vídeo completo em qualquer
+            // orientação; endereços externos abrem no YouTube ou no navegador.
+            private boolean staysInsidePlayer(Uri uri) {
+                String scheme = uri.getScheme();
+                if (!("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme))) return false;
+                String host = uri.getHost();
+                return host != null && (host.equals("youtube-nocookie.com")
+                        || host.equals("www.youtube-nocookie.com"));
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                String scheme = request.getUrl().getScheme();
-                return !("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme));
+                if (staysInsidePlayer(request.getUrl())) return false;
+                openVideoAddressOutside(request.getUrl());
+                return true;
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                String scheme = Uri.parse(url).getScheme();
-                return !("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme));
+                Uri uri = Uri.parse(url);
+                if (staysInsidePlayer(uri)) return false;
+                openVideoAddressOutside(uri);
+                return true;
             }
         });
         webView.setWebChromeClient(new WebChromeClient() {
@@ -867,6 +883,24 @@ public final class MainActivity extends Activity {
                 "Referer", "https://" + HOST + "/cfa-android/");
         webView.loadUrl(embedUrl, playerHeaders);
         enterImmersive();
+    }
+
+    /**
+     * Abre fora do aplicativo os endereços tocados dentro do player, como a
+     * página completa do YouTube. No aplicativo do YouTube ou no navegador,
+     * o vídeo completo é exibido corretamente em pé, no modo retrato.
+     */
+    private void openVideoAddressOutside(Uri uri) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, uri));
+            Toast.makeText(this, "ABRINDO FORA DO APLICATIVO.", Toast.LENGTH_SHORT).show();
+        } catch (android.content.ActivityNotFoundException error) {
+            Toast.makeText(this, "Nenhum aplicativo disponível para abrir este endereço.",
+                    Toast.LENGTH_LONG).show();
+        } catch (Exception error) {
+            Toast.makeText(this, "Não foi possível abrir este endereço.",
+                    Toast.LENGTH_LONG).show();
+        }
     }
 
     private void hideCustomVideoView(boolean notifyPlayer) {
