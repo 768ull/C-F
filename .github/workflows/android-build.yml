@@ -58,6 +58,7 @@ jobs:
           grep -q 'reportResult' app/src/main/java/br/com/colecaocf/MainActivity.java
           grep -q 'consumeResetRequest' app/src/main/java/br/com/colecaocf/MainActivity.java
           grep -q 'addSavesCard' app/src/main/java/br/com/colecaocf/MainActivity.java
+          grep -q 'QR CODES DAS REDES SOCIAIS' app/src/main/java/br/com/colecaocf/MainActivity.java
           test -f app/src/main/java/br/com/colecaocf/UpdateSignatureVerifier.java
           test -f app/src/main/assets/bundle_parts/00.b64
           test -f app/src/main/assets/bundle_parts/24.b64

@@ -727,7 +727,7 @@ public final class MainActivity extends Activity {
 
             TextView supportTitle = label("APOIE O TORAJO", 16, TEXT, true);
             supportTitle.setLetterSpacing(.06f);
-            supportCard.addView(supportTitle, new LinearLayout.LayoutParams(-1, dp(30)));
+            supportCard.addView(supportTitle, new LinearLayout.LayoutParams(-1, -2));
             TextView supportSubtitle = label("Escolha uma opção para conhecer, acompanhar e participar.", 12, MUTED, false);
             supportSubtitle.setMaxLines(3);
             supportCard.addView(supportSubtitle, new LinearLayout.LayoutParams(-1, -2));
@@ -782,7 +782,7 @@ public final class MainActivity extends Activity {
 
             TextView socialTitle = label("REDES SOCIAIS DO TORAJO", 16, TEXT, true);
             socialTitle.setLetterSpacing(.06f);
-            socialCard.addView(socialTitle, new LinearLayout.LayoutParams(-1, dp(30)));
+            socialCard.addView(socialTitle, new LinearLayout.LayoutParams(-1, -2));
             TextView socialSubtitle = label("Siga o Torajo em todas as redes e ouça as músicas oficiais.", 12, MUTED, false);
             socialSubtitle.setMaxLines(3);
             socialCard.addView(socialSubtitle, new LinearLayout.LayoutParams(-1, -2));
@@ -811,7 +811,7 @@ public final class MainActivity extends Activity {
 
             TextView qrTitle = label("QR CODES DOS CANAIS E DO APLICATIVO", 16, TEXT, true);
             qrTitle.setLetterSpacing(.06f);
-            qrCard.addView(qrTitle, new LinearLayout.LayoutParams(-1, dp(30)));
+            qrCard.addView(qrTitle, new LinearLayout.LayoutParams(-1, -2));
             TextView qrSubtitle = label("Mostre o código para outro celular escanear ou salve a imagem.", 12, MUTED, false);
             qrSubtitle.setMaxLines(3);
             qrCard.addView(qrSubtitle, new LinearLayout.LayoutParams(-1, -2));
@@ -832,6 +832,40 @@ public final class MainActivity extends Activity {
             LinearLayout.LayoutParams qrNoteParams = new LinearLayout.LayoutParams(-1, -2);
             qrNoteParams.topMargin = dp(12);
             qrCard.addView(qrNote, qrNoteParams);
+
+            LinearLayout socialQrCard = new LinearLayout(this);
+            socialQrCard.setOrientation(LinearLayout.VERTICAL);
+            socialQrCard.setPadding(dp(16), dp(14), dp(16), dp(12));
+            socialQrCard.setBackground(rounded(CARD, 18, Color.rgb(47, 49, 55)));
+            LinearLayout.LayoutParams socialQrCardParams = new LinearLayout.LayoutParams(-1, -2);
+            socialQrCardParams.topMargin = dp(18);
+            body.addView(socialQrCard, socialQrCardParams);
+
+            TextView socialQrTitle = label("QR CODES DAS REDES SOCIAIS", 16, TEXT, true);
+            socialQrTitle.setLetterSpacing(.06f);
+            socialQrCard.addView(socialQrTitle, new LinearLayout.LayoutParams(-1, -2));
+            TextView socialQrSubtitle = label("Mostre o código para outro celular seguir o Torajo.", 12, MUTED, false);
+            socialQrSubtitle.setMaxLines(3);
+            socialQrCard.addView(socialQrSubtitle, new LinearLayout.LayoutParams(-1, -2));
+
+            socialQrCard.addView(qrItem("INSTAGRAM", "QR code do perfil @mundo.torajo", "INSTAGRAM", "https://www.instagram.com/mundo.torajo/"));
+            socialQrCard.addView(supportDivider());
+            socialQrCard.addView(qrItem("TIKTOK", "QR code do perfil @torajo_yt", "TIKTOK", "https://www.tiktok.com/@torajo_yt"));
+            socialQrCard.addView(supportDivider());
+            socialQrCard.addView(qrItem("X · TWITTER", "QR code do perfil @Torajo_yt", "X-TWITTER", "https://x.com/Torajo_yt"));
+            socialQrCard.addView(supportDivider());
+            socialQrCard.addView(qrItem("DISCORD", "QR code do servidor no Discord", "DISCORD", "https://discord.gg/mundotorajo"));
+            socialQrCard.addView(supportDivider());
+            socialQrCard.addView(qrItem("MENSAGENS · LIVEPIX", "QR code do LivePix do Torajo", "LIVEPIX", "https://livepix.gg/torajo"));
+            socialQrCard.addView(supportDivider());
+            socialQrCard.addView(qrItem("SPOTIFY", "QR code das músicas no Spotify", "SPOTIFY", "https://open.spotify.com/artist/1cWyhd5vnaH3hVAksS9TTe"));
+            socialQrCard.addView(supportDivider());
+            socialQrCard.addView(qrItem("YOUTUBE MUSIC", "QR code das músicas oficiais", "YOUTUBE-MUSIC", "https://music.youtube.com/channel/UCFnAcfR_-EsLkNJ3FkqB1AA"));
+
+            TextView socialQrNote = label("Aponte a câmera de outro celular para o código mostrado na tela.", 10, MUTED, false);
+            LinearLayout.LayoutParams socialQrNoteParams = new LinearLayout.LayoutParams(-1, -2);
+            socialQrNoteParams.topMargin = dp(12);
+            socialQrCard.addView(socialQrNote, socialQrNoteParams);
         } else if (videosTab) {
             TextView youtubeNote = label(
                     "OS TRÊS VÍDEOS DO CANAL ASSISTEM AQUI DENTRO, PELO PLAYER OFICIAL DO YOUTUBE.",
