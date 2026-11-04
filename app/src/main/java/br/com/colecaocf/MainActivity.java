@@ -313,8 +313,12 @@ public final class MainActivity extends Activity {
             if ("algorithomus".equals(gameId)) slot.put("d", 0);
             slots.put(slot);
             int index = slots.length() - 1;
-            appPrefs.edit().putString(gameId + "_slots", slots.toString())
-                    .putInt(gameId + "_active", index).apply();
+            SharedPreferences.Editor editor = appPrefs.edit()
+                    .putString(gameId + "_slots", slots.toString())
+                    .putInt(gameId + "_active", index);
+            // Um novo jogo começa do zero também dentro do jogo: recorde e tutorial.
+            if (!"algorithomus".equals(gameId)) editor.putBoolean(gameId + "_reset_pending", true);
+            editor.apply();
         } catch (Exception error) {
             // Ignora valores inválidos.
         }
@@ -1413,7 +1417,7 @@ public final class MainActivity extends Activity {
         newButton.setOnClickListener(v -> {
             createNewSlot(gameId);
             refreshScoreBoard();
-            Toast.makeText(this, "NOVO SAVE DE " + gameTitle + " CRIADO.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "NOVO SAVE DE " + gameTitle + " CRIADO. ELE COMEÇA DO ZERO NA PRÓXIMA VEZ QUE VOCÊ ABRIR O JOGO.", Toast.LENGTH_LONG).show();
         });
         LinearLayout.LayoutParams newParams = new LinearLayout.LayoutParams(0, dp(38), 1f);
         newParams.leftMargin = dp(6);
@@ -1430,8 +1434,8 @@ public final class MainActivity extends Activity {
         box.setPadding(dp(20), dp(20), dp(20), dp(20));
         box.setBackground(rounded(Color.rgb(24, 25, 29), 20, Color.TRANSPARENT));
 
-        TextView message = label("RESETAR O SAVE DE " + gameTitle + "? OS PONTOS, AS VITÓRIAS E O PROGRESSO DESTE SAVE SERÃO ZERADOS. OS OUTROS SAVES CONTINUAM GUARDADOS.", 12, TEXT, false);
-        message.setMaxLines(6);
+        TextView message = label("RESETAR O SAVE DE " + gameTitle + "? OS PONTOS, AS VITÓRIAS E O PROGRESSO DESTE SAVE SERÃO ZERADOS, E O RECORDE INTERNO DO JOGO TAMBÉM SERÁ ZERADO NA PRÓXIMA VEZ QUE VOCÊ ABRIR O JOGO. OS OUTROS SAVES CONTINUAM GUARDADOS.", 12, TEXT, false);
+        message.setMaxLines(8);
         box.addView(message, new LinearLayout.LayoutParams(-1, -2));
 
         TextView confirm = label("RESETAR", 12, Color.WHITE, true);
@@ -1574,6 +1578,14 @@ public final class MainActivity extends Activity {
                     output.flush();
                 }
                 Toast.makeText(this, "SAVE EXPORTADO EM DOWNLOADS › C-F-A.", Toast.LENGTH_LONG).show();
+                Intent open = new Intent(Intent.ACTION_VIEW);
+                open.setDataAndType(saved, "text/plain");
+                open.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                try {
+                    startActivity(open);
+                } catch (Exception noViewer) {
+                    Toast.makeText(this, "O ARQUIVO ESTÁ EM DOWNLOADS › C-F-A › " + fileName + ".", Toast.LENGTH_LONG).show();
+                }
             } else {
                 File directory = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "C-F-A");
                 if (!directory.isDirectory() && !directory.mkdirs() && !directory.isDirectory())
@@ -1583,10 +1595,30 @@ public final class MainActivity extends Activity {
                     output.write(text.getBytes(StandardCharsets.UTF_8));
                     output.flush();
                 }
-                Toast.makeText(this, "SAVE EXPORTADO EM DOWNLOADS › C-F-A.", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "SAVE EXPORTADO: " + file.getAbsolutePath(), Toast.LENGTH_LONG).show();
             }
         } catch (Exception error) {
             Toast.makeText(this, "Não foi possível exportar o save.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    /** Zera o histórico interno do jogo quando foi pedido reset ou um novo jogo. */
+    private void clearGameStorageOnOpen(String gameId, WebView view) {
+        try {
+            if (!appPrefs.getBoolean(gameId + "_reset_pending", false)) return;
+            if ("frutris".equals(gameId)) {
+                view.evaluateJavascript(
+                        "(function(){try{if(window.CFAndroid&&window.CFAndroid.consumeResetRequest&&window.CFAndroid.consumeResetRequest('frutris')){localStorage.removeItem('frutrisWeeklyBestV1');localStorage.removeItem('tetrisTutorialVisto6');}}catch(e){}"
+                      + "try{if(window.Tetris&&window.Tetris.ui&&window.Tetris.ui.loadRecord)window.Tetris.ui.loadRecord();}catch(e){}})();",
+                        null);
+            } else if ("cobrinha".equals(gameId)) {
+                view.evaluateJavascript(
+                        "(function(){try{if(window.CFAndroid&&window.CFAndroid.consumeResetRequest&&window.CFAndroid.consumeResetRequest('cobrinha')){localStorage.removeItem('cobrinha.recorde');localStorage.removeItem('cobrinha.tema');localStorage.removeItem('cobrinha.direcional');}}catch(e){}"
+                      + "try{var C=window.Cobrinha;if(C&&C.state)C.state.best=0;var el=document.getElementById('best');if(el)el.textContent='0';}catch(e){}})();",
+                        null);
+            }
+        } catch (Exception error) {
+            // O próprio jogo aplica a limpeza ao abrir.
         }
     }
 
@@ -1868,6 +1900,7 @@ public final class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView v, String url) {
                 super.onPageFinished(v, url);
+                if ("frutris".equals(id) || "cobrinha".equals(id)) clearGameStorageOnOpen(id, v);
                 if ("frutris".equals(id)) {
                     v.evaluateJavascript(
                             "(function(){var b=document.getElementById('exitGameBtn');var h=document.querySelector('.game-hud');if(b&&h&&b.parentNode!==h)h.appendChild(b);})();",
