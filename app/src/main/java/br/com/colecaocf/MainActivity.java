@@ -51,6 +51,7 @@ import java.util.Map;
 import java.net.URL;
 import java.security.MessageDigest;
 import javax.net.ssl.HttpsURLConnection;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -78,6 +79,8 @@ public final class MainActivity extends Activity {
     private static final String PREFS_NAME = "cf-persistent-data";
     private static final int INITIAL_BUNDLE_VERSION = 1;
     private static final String BUNDLE_MARKER = ".bundle-v7";
+    private static final long FRUTRIS_WIN_SCORE = 30000L; // meta oficial do Frutris
+    private static final long COBRINHA_WIN_SCORE = 1920L; // tabuleiro 14x14 completo: 192 frutas x 10 pontos
 
     private FrameLayout root;
     private WebView webView;
@@ -209,19 +212,162 @@ public final class MainActivity extends Activity {
         return Math.max(0L, appPrefs.getLong(gameId + "_points", 0L));
     }
 
+    // ---- Sistema de saves: cada jogo guarda uma lista de saves. ----
+    // Cada save é um JSON com os campos: t (criacao), s (pontos padrao, somente
+    // vitorias), i (pontos infinitos, todas as partidas), w (vitorias) e
+    // d (dia da historia, somente no Algorithomus).
+
+    private JSONArray loadSlots(String gameId) {
+        try {
+            String raw = appPrefs.getString(gameId + "_slots", null);
+            JSONArray slots = null;
+            if (raw != null) {
+                try { slots = new JSONArray(raw); } catch (Exception badJson) { slots = null; }
+            }
+            if (slots == null) slots = new JSONArray();
+            if (slots.length() == 0) {
+                JSONObject first = new JSONObject();
+                first.put("t", System.currentTimeMillis());
+                if ("algorithomus".equals(gameId)) {
+                    first.put("d", appPrefs.getInt("algorithomus_story_day", 0));
+                } else {
+                    first.put("i", pointsFor(gameId));
+                }
+                slots.put(first);
+                appPrefs.edit().putString(gameId + "_slots", slots.toString()).apply();
+            }
+            return slots;
+        } catch (Exception error) {
+            return new JSONArray();
+        }
+    }
+
+    private int activeSlotIndex(String gameId) {
+        JSONArray slots = loadSlots(gameId);
+        int index = appPrefs.getInt(gameId + "_active", 0);
+        if (index < 0 || index >= slots.length()) index = 0;
+        return index;
+    }
+
+    private JSONObject activeSlot(String gameId) {
+        try {
+            return loadSlots(gameId).getJSONObject(activeSlotIndex(gameId));
+        } catch (Exception error) {
+            return new JSONObject();
+        }
+    }
+
+    private long slotLong(JSONObject slot, String key) {
+        try {
+            return Math.max(0L, slot.getLong(key));
+        } catch (Exception error) {
+            return 0L;
+        }
+    }
+
+    private long activeSlotValue(String gameId, String key) {
+        return slotLong(activeSlot(gameId), key);
+    }
+
+    private int activeStoryDay() {
+        return (int) activeSlotValue("algorithomus", "d");
+    }
+
+    private void addSlotPoints(String gameId, String key, long delta) {
+        if (delta <= 0L) return;
+        synchronized (this) {
+            try {
+                JSONArray slots = loadSlots(gameId);
+                int index = activeSlotIndex(gameId);
+                JSONObject slot = slots.getJSONObject(index);
+                long current = slotLong(slot, key);
+                long updated = current > Long.MAX_VALUE - delta ? Long.MAX_VALUE : current + delta;
+                slot.put(key, updated);
+                slots.put(index, slot);
+                appPrefs.edit().putString(gameId + "_slots", slots.toString()).apply();
+            } catch (Exception error) {
+                // Ignora valores inválidos para não corromper os saves.
+            }
+        }
+    }
+
+    private void setStoryDay(int unlockedDay) {
+        try {
+            String gameId = "algorithomus";
+            JSONArray slots = loadSlots(gameId);
+            int index = activeSlotIndex(gameId);
+            JSONObject slot = slots.getJSONObject(index);
+            slot.put("d", unlockedDay);
+            slots.put(index, slot);
+            appPrefs.edit().putString(gameId + "_slots", slots.toString()).apply();
+        } catch (Exception error) {
+            // Ignora valores inválidos para não corromper os saves.
+        }
+    }
+
+    private void createNewSlot(String gameId) {
+        try {
+            JSONArray slots = loadSlots(gameId);
+            JSONObject slot = new JSONObject();
+            slot.put("t", System.currentTimeMillis());
+            if ("algorithomus".equals(gameId)) slot.put("d", 0);
+            slots.put(slot);
+            int index = slots.length() - 1;
+            appPrefs.edit().putString(gameId + "_slots", slots.toString())
+                    .putInt(gameId + "_active", index).apply();
+        } catch (Exception error) {
+            // Ignora valores inválidos.
+        }
+    }
+
+    private void resetActiveSlot(String gameId) {
+        try {
+            JSONArray slots = loadSlots(gameId);
+            int index = activeSlotIndex(gameId);
+            JSONObject slot = slots.getJSONObject(index);
+            slot.put("s", 0L);
+            slot.put("i", 0L);
+            slot.put("w", 0L);
+            if ("algorithomus".equals(gameId)) slot.put("d", 0);
+            slots.put(index, slot);
+            SharedPreferences.Editor editor = appPrefs.edit()
+                    .putString(gameId + "_slots", slots.toString());
+            if (!"algorithomus".equals(gameId)) editor.putBoolean(gameId + "_reset_pending", true);
+            editor.apply();
+        } catch (Exception error) {
+            // Ignora valores inválidos.
+        }
+    }
+
+    private void activateSlot(String gameId, int index) {
+        try {
+            JSONArray slots = loadSlots(gameId);
+            if (index < 0 || index >= slots.length()) return;
+            appPrefs.edit().putInt(gameId + "_active", index).apply();
+        } catch (Exception error) {
+            // Ignora valores inválidos.
+        }
+    }
+
     private void refreshScoreBoard() {
         if (scoreTotalView == null || scoreDetailsView == null) return;
-        long frutris = pointsFor("frutris");
-        long cobrinha = pointsFor("cobrinha");
-        long total = frutris > Long.MAX_VALUE - cobrinha ? Long.MAX_VALUE : frutris + cobrinha;
         java.text.NumberFormat fmt = java.text.NumberFormat.getIntegerInstance(new Locale("pt", "BR"));
+        long frutris = activeSlotValue("frutris", "s");
+        long cobrinha = activeSlotValue("cobrinha", "s");
+        long total = frutris > Long.MAX_VALUE - cobrinha ? Long.MAX_VALUE : frutris + cobrinha;
         scoreTotalView.setText(fmt.format(total) + " PTS");
-        int storyDay = appPrefs.getInt("algorithomus_story_day", 0);
+        String frutrisLine = "FRUTRIS  PADRÃO " + fmt.format(frutris)
+                + " (VITÓRIAS: " + (int) activeSlotValue("frutris", "w") + ")"
+                + " · INFINITA " + fmt.format(activeSlotValue("frutris", "i"));
+        String cobrinhaLine = "COBRINHA  PADRÃO " + fmt.format(cobrinha)
+                + " (VITÓRIAS: " + (int) activeSlotValue("cobrinha", "w") + ")"
+                + " · INFINITA " + fmt.format(activeSlotValue("cobrinha", "i"));
+        int storyDay = activeStoryDay();
         String storyProgress = storyDay >= 1 && storyDay <= 7
                 ? Math.round((storyDay - 1) * 100f / 6f) + "% DA HISTÓRIA"
                 : "--% (AGUARDANDO SINCRONIZAÇÃO)";
-        scoreDetailsView.setText("FRUTRIS  " + fmt.format(frutris)
-                + "\nCOBRINHA  " + fmt.format(cobrinha)
+        scoreDetailsView.setText(frutrisLine
+                + "\n" + cobrinhaLine
                 + "\nALGORITHOMUS  " + storyProgress);
     }
 
@@ -413,6 +559,26 @@ public final class MainActivity extends Activity {
                 "s.score = 0;",
                 "s.score = 0; if (window.CFAndroid) window.CFAndroid.reportScore('cobrinha', 0); /*CF_SCORE_RESET*/",
                 "CF_SCORE_RESET");
+        // Vitória da Cobrinha: tabuleiro completo. Somente aqui o placar padrão soma.
+        patchText(new File(base, "apps/cobrinha/js/engine.js"),
+                "s.won = true;\r\n        C.ui.showOver(true);",
+                "s.won = true;\r\n        if (window.CFAndroid && window.CFAndroid.reportResult) window.CFAndroid.reportResult('cobrinha', true, s.score); /*CF_WIN_COBRINHA*/\r\n        C.ui.showOver(true);",
+                "CF_WIN_COBRINHA");
+        // Vitória do Frutris: meta oficial de 30.000 pontos alcançada.
+        patchText(new File(base, "apps/frutris/js/ui.js"),
+                "state.goalReached = true;\r\n            T.audio.play(\"record\");",
+                "state.goalReached = true;\r\n            if (window.CFAndroid && window.CFAndroid.reportResult) window.CFAndroid.reportResult('frutris', true, state.score); /*CF_WIN_FRUTRIS*/\r\n            T.audio.play(\"record\");",
+                "CF_WIN_FRUTRIS");
+        // Reset da Cobrinha: limpa recorde, tema e direcional salvos no jogo.
+        patchText(new File(base, "apps/cobrinha/js/ui.js"),
+                "C.ui.init = function() {\r\n        dom = {",
+                "C.ui.init = function() {\r\n        try { if (window.CFAndroid && window.CFAndroid.consumeResetRequest && window.CFAndroid.consumeResetRequest('cobrinha')) { localStorage.removeItem(C.STORAGE.best); localStorage.removeItem(C.STORAGE.theme); localStorage.removeItem(C.STORAGE.dpad); } } catch (err) {}\r\n        dom = {",
+                "CF_RESET_COBRINHA");
+        // Reset do Frutris: limpa o recorde e o tutorial salvos no jogo.
+        patchText(new File(base, "apps/frutris/js/main.js"),
+                "T.ui.loadRecord();",
+                "try { if (window.CFAndroid && window.CFAndroid.consumeResetRequest && window.CFAndroid.consumeResetRequest('frutris')) { localStorage.removeItem(T.RECORD_STORAGE_KEY); localStorage.removeItem(T.TUTORIAL_STORAGE_KEY); } } catch (err) {}\r\n        T.ui.loadRecord();",
+                "CF_RESET_FRUTRIS");
     }
 
 
@@ -495,14 +661,18 @@ public final class MainActivity extends Activity {
     }
 
     private void showCollection() {
-        showCollection(false, false);
+        showCollection(false, false, false);
     }
 
     private void showCollection(boolean linksTab) {
-        showCollection(linksTab, false);
+        showCollection(linksTab, false, false);
     }
 
     private void showCollection(boolean linksTab, boolean videosTab) {
+        showCollection(linksTab, videosTab, false);
+    }
+
+    private void showCollection(boolean linksTab, boolean videosTab, boolean savesTab) {
         if (videoCustomView != null) hideCustomVideoView(true);
         gameOpen = false;
         videoOpen = false;
@@ -526,7 +696,8 @@ public final class MainActivity extends Activity {
         scroll.addView(body);
 
         TextView eyebrow = label(linksTab ? "APOIO E LINKS OFICIAIS" :
-                (videosTab ? "VÍDEOS DO TORAJO" : "COLEÇÃO DE JOGOS E APLICATIVOS"), 11, MUTED, true);
+                (videosTab ? "VÍDEOS DO TORAJO" :
+                (savesTab ? "SAVES DOS JOGOS" : "COLEÇÃO DE JOGOS E APLICATIVOS")), 11, MUTED, true);
         eyebrow.setLetterSpacing(.16f);
         body.addView(eyebrow, new LinearLayout.LayoutParams(-1, dp(28)));
 
@@ -535,7 +706,8 @@ public final class MainActivity extends Activity {
         body.addView(title, new LinearLayout.LayoutParams(-1, dp(60)));
 
         TextView subtitle = label(linksTab ? "Acompanhe e apoie o Mundo Torajo." :
-                (videosTab ? "Assista aos vídeos sem sair do aplicativo." : "Três experiências. Uma coleção."), 15, MUTED, false);
+                (videosTab ? "Assista aos vídeos sem sair do aplicativo." :
+                (savesTab ? "Cada novo jogo cria um save novo, sem destruir o antigo." : "Três experiências. Uma coleção.")), 15, MUTED, false);
         LinearLayout.LayoutParams sub = new LinearLayout.LayoutParams(-1, dp(32));
         sub.bottomMargin = dp(20);
         body.addView(subtitle, sub);
@@ -675,12 +847,23 @@ public final class MainActivity extends Activity {
             View youtubeGap2 = new View(this);
             body.addView(youtubeGap2, new LinearLayout.LayoutParams(1, dp(14)));
             body.addView(youtubeCard("VÍDEO 3", "LDzCd4y4Iv8"));
+        } else if (savesTab) {
+            TextView savesNote = label(
+                    "CADA NOVO JOGO CRIA UM NOVO SAVE. TOQUE EM UM SAVE ANTIGO PARA VOLTAR A ELE.",
+                    12, MUTED, false);
+            savesNote.setMaxLines(3);
+            LinearLayout.LayoutParams savesNoteParams = new LinearLayout.LayoutParams(-1, -2);
+            savesNoteParams.bottomMargin = dp(12);
+            body.addView(savesNote, savesNoteParams);
+            addSavesCard(body, "frutris", "FRUTRIS");
+            addSavesCard(body, "cobrinha", "COBRINHA");
+            addSavesCard(body, "algorithomus", "SIMULADOR ALGORITHOMUS");
         } else {
             LinearLayout scoreCard = new LinearLayout(this);
             scoreCard.setOrientation(LinearLayout.VERTICAL);
             scoreCard.setPadding(dp(18), dp(12), dp(18), dp(12));
             scoreCard.setBackground(rounded(CARD, 18, Color.rgb(70, 61, 88)));
-            TextView scoreCaption = label("PLACAR GERAL E PROGRESSO DA HISTÓRIA", 9, MUTED, true);
+            TextView scoreCaption = label("PLACAR DO SAVE ATIVO · SÓ AS VITÓRIAS CONTAM", 9, MUTED, true);
             scoreCaption.setLetterSpacing(.05f);
             scoreCard.addView(scoreCaption, new LinearLayout.LayoutParams(-1, dp(20)));
             scoreTotalView = label("0 PTS", 30, TEXT, true);
@@ -697,17 +880,21 @@ public final class MainActivity extends Activity {
             refreshScoreBoard();
 
             body.addView(gameCard("Frutris", "Jogo de blocos · controles por gestos", "frutris.webp", "frutris", 0));
+            body.addView(gameActionRow("frutris", "FRUTRIS"));
             View gap = new View(this);
             body.addView(gap, new LinearLayout.LayoutParams(1, dp(14)));
             body.addView(gameCard("Cobrinha", "Jogo da cobrinha · deslize para direcionar", "cobrinha.webp", "cobrinha", 0));
+            body.addView(gameActionRow("cobrinha", "COBRINHA"));
             View siteGap = new View(this);
             body.addView(siteGap, new LinearLayout.LayoutParams(1, dp(14)));
             body.addView(gameCard("Simulador completo", "Algorithomus · telefone interativo com todos os aplicativos", null, "algorithomus", R.drawable.ic_algorithomus));
+            body.addView(gameActionRow("algorithomus", "SIMULADOR ALGORITHOMUS"));
         }
 
         TextView footer = label(linksTab ? "APOIE E ACOMPANHE O TORAJO" :
                 (videosTab ? "TOQUE EM UM VÍDEO PARA ASSISTIR" :
-                        (assetsReady ? "TOQUE EM UM JOGO PARA ABRIR" : "NÃO FOI POSSÍVEL PREPARAR OS JOGOS")),
+                (savesTab ? "TOQUE EM UM SAVE PARA VOLTAR A ELE" :
+                        (assetsReady ? "TOQUE EM UM JOGO PARA ABRIR" : "NÃO FOI POSSÍVEL PREPARAR OS JOGOS"))),
                 10, assetsReady ? MUTED : Color.rgb(255, 138, 128), true);
         footer.setGravity(Gravity.CENTER);
         footer.setLetterSpacing(.12f);
@@ -724,9 +911,11 @@ public final class MainActivity extends Activity {
         FrameLayout.LayoutParams navigationParams = new FrameLayout.LayoutParams(
                 -1, dp(68), Gravity.BOTTOM);
         root.addView(navigation, navigationParams);
-        navigation.addView(collectionTabButton("JOGOS", !linksTab && !videosTab, R.drawable.ic_launcher_cfa),
+        navigation.addView(collectionTabButton("JOGOS", !linksTab && !videosTab && !savesTab, R.drawable.ic_launcher_cfa),
                 new LinearLayout.LayoutParams(0, -1, 1f));
         navigation.addView(collectionTabButton("VÍDEOS", videosTab, android.R.drawable.ic_media_play),
+                new LinearLayout.LayoutParams(0, -1, 1f));
+        navigation.addView(collectionTabButton("SAVES", savesTab, android.R.drawable.ic_menu_save),
                 new LinearLayout.LayoutParams(0, -1, 1f));
         navigation.addView(collectionTabButton("LINKS", linksTab, android.R.drawable.ic_menu_share),
                 new LinearLayout.LayoutParams(0, -1, 1f));
@@ -751,7 +940,7 @@ public final class MainActivity extends Activity {
         TextView text = label(title, 12, selected ? TEXT : MUTED, true);
         text.setGravity(Gravity.CENTER_VERTICAL);
         tab.addView(text);
-        tab.setOnClickListener(v -> showCollection("LINKS".equals(title), "VÍDEOS".equals(title)));
+        tab.setOnClickListener(v -> showCollection("LINKS".equals(title), "VÍDEOS".equals(title), "SAVES".equals(title)));
         return tab;
     }
 
@@ -1152,6 +1341,221 @@ public final class MainActivity extends Activity {
         }
     }
 
+    /** Linha de ações de cada jogo na aba JOGOS: RESETAR o save atual ou criar um NOVO JOGO. */
+    private View gameActionRow(final String gameId, final String gameTitle) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
+        rowParams.topMargin = dp(4);
+        rowParams.bottomMargin = dp(12);
+        row.setLayoutParams(rowParams);
+
+        TextView resetButton = label("RESETAR", 11, Color.WHITE, true);
+        resetButton.setGravity(Gravity.CENTER);
+        resetButton.setLetterSpacing(.05f);
+        resetButton.setBackground(new RippleDrawable(
+                ColorStateList.valueOf(Color.argb(70, 255, 255, 255)),
+                rounded(Color.rgb(122, 38, 38), 18, Color.TRANSPARENT), null));
+        resetButton.setClickable(true);
+        resetButton.setFocusable(true);
+        resetButton.setMinimumHeight(dp(38));
+        resetButton.setContentDescription("Resetar o save de " + gameTitle);
+        resetButton.setOnClickListener(v -> confirmReset(gameId, gameTitle));
+        LinearLayout.LayoutParams resetParams = new LinearLayout.LayoutParams(0, dp(38), 1f);
+        resetParams.rightMargin = dp(6);
+        row.addView(resetButton, resetParams);
+
+        TextView newButton = label("NOVO JOGO", 11, Color.WHITE, true);
+        newButton.setGravity(Gravity.CENTER);
+        newButton.setLetterSpacing(.05f);
+        newButton.setBackground(new RippleDrawable(
+                ColorStateList.valueOf(Color.argb(70, 255, 255, 255)),
+                rounded(Color.rgb(40, 84, 52), 18, Color.TRANSPARENT), null));
+        newButton.setClickable(true);
+        newButton.setFocusable(true);
+        newButton.setMinimumHeight(dp(38));
+        newButton.setContentDescription("Criar um novo jogo de " + gameTitle);
+        newButton.setOnClickListener(v -> {
+            createNewSlot(gameId);
+            refreshScoreBoard();
+            Toast.makeText(this, "NOVO SAVE DE " + gameTitle + " CRIADO.", Toast.LENGTH_LONG).show();
+        });
+        LinearLayout.LayoutParams newParams = new LinearLayout.LayoutParams(0, dp(38), 1f);
+        newParams.leftMargin = dp(6);
+        row.addView(newButton, newParams);
+        return row;
+    }
+
+    /** Pede confirmação antes de zerar o save atual de um jogo. */
+    private void confirmReset(final String gameId, final String gameTitle) {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(20), dp(20), dp(20));
+        box.setBackground(rounded(Color.rgb(24, 25, 29), 20, Color.TRANSPARENT));
+
+        TextView message = label("RESETAR O SAVE DE " + gameTitle + "? OS PONTOS, AS VITÓRIAS E O PROGRESSO DESTE SAVE SERÃO ZERADOS. OS OUTROS SAVES CONTINUAM GUARDADOS.", 12, TEXT, false);
+        message.setMaxLines(6);
+        box.addView(message, new LinearLayout.LayoutParams(-1, -2));
+
+        TextView confirm = label("RESETAR", 12, Color.WHITE, true);
+        confirm.setGravity(Gravity.CENTER);
+        confirm.setBackground(new RippleDrawable(
+                ColorStateList.valueOf(Color.argb(70, 255, 255, 255)),
+                rounded(Color.rgb(170, 38, 38), 18, Color.TRANSPARENT), null));
+        confirm.setClickable(true);
+        confirm.setFocusable(true);
+        confirm.setMinimumHeight(dp(44));
+        confirm.setOnClickListener(v -> {
+            performReset(gameId);
+            Toast.makeText(this, "SAVE DE " + gameTitle + " RESETADO.", Toast.LENGTH_LONG).show();
+            dialog.dismiss();
+        });
+        LinearLayout.LayoutParams confirmParams = new LinearLayout.LayoutParams(-1, -2);
+        confirmParams.topMargin = dp(14);
+        box.addView(confirm, confirmParams);
+
+        TextView cancel = label("CANCELAR", 12, MUTED, true);
+        cancel.setGravity(Gravity.CENTER);
+        cancel.setClickable(true);
+        cancel.setFocusable(true);
+        cancel.setMinimumHeight(dp(40));
+        cancel.setOnClickListener(v -> dialog.dismiss());
+        LinearLayout.LayoutParams cancelParams = new LinearLayout.LayoutParams(-1, -2);
+        cancelParams.topMargin = dp(8);
+        box.addView(cancel, cancelParams);
+
+        dialog.setContentView(box);
+        dialog.show();
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawable(new ColorDrawable(Color.argb(190, 0, 0, 0)));
+            window.setLayout(Math.min(dp(342), getResources().getDisplayMetrics().widthPixels - dp(24)), -2);
+        }
+    }
+
+    /** Zera o save atual de um jogo; no simulador também apaga os dados locais do site. */
+    private void performReset(String gameId) {
+        resetActiveSlot(gameId);
+        if ("algorithomus".equals(gameId)) {
+            try {
+                android.webkit.WebStorage.getInstance().deleteOrigin(AlgorithmusNet.REAL_ORIGIN);
+            } catch (Exception error) {
+                // O progresso salvo no servidor pode voltar quando houver internet.
+            }
+        }
+        refreshScoreBoard();
+    }
+
+    /** Cartão da aba SAVES: lista os saves de um jogo, permite voltar a um save e exportá-lo. */
+    private void addSavesCard(LinearLayout body, final String gameId, final String gameTitle) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(16), dp(14), dp(16), dp(12));
+        card.setBackground(rounded(CARD, 18, Color.rgb(47, 49, 55)));
+        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(-1, -2);
+        cardParams.bottomMargin = dp(14);
+        body.addView(card, cardParams);
+
+        TextView cardTitle = label(gameTitle, 14, TEXT, true);
+        card.addView(cardTitle, new LinearLayout.LayoutParams(-1, dp(26)));
+
+        JSONArray slots = loadSlots(gameId);
+        int active = activeSlotIndex(gameId);
+        java.text.NumberFormat fmt = java.text.NumberFormat.getIntegerInstance(new Locale("pt", "BR"));
+        java.text.SimpleDateFormat dateFormat = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", new Locale("pt", "BR"));
+        for (int i = 0; i < slots.length(); i++) {
+            JSONObject slot;
+            try {
+                slot = slots.getJSONObject(i);
+            } catch (Exception error) {
+                continue;
+            }
+            final int slotIndex = i;
+            long padrao = slotLong(slot, "s");
+            long infinita = slotLong(slot, "i");
+            long wins = slotLong(slot, "w");
+            long created = slotLong(slot, "t");
+            String when = created > 0L ? dateFormat.format(new java.util.Date(created)) : "--/--/----";
+            String info = "SAVE " + (i + 1) + (i == active ? " · ATIVO" : "")
+                    + "\n" + when
+                    + "\nPADRÃO " + fmt.format(padrao) + " · VITÓRIAS " + fmt.format(wins)
+                    + " · INFINITA " + fmt.format(infinita);
+            if ("algorithomus".equals(gameId)) {
+                int day = (int) slotLong(slot, "d");
+                info = info + "\nHISTÓRIA: " + (day >= 1 && day <= 7 ? "DIA " + day : "NÃO COMEÇADA");
+            }
+
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setClickable(true);
+            row.setFocusable(true);
+            row.setContentDescription("Usar o " + (i + 1) + "º save de " + gameTitle);
+            row.setOnClickListener(v -> {
+                activateSlot(gameId, slotIndex);
+                showCollection(false, false, true);
+                Toast.makeText(this, "SAVE " + (slotIndex + 1) + " DE " + gameTitle + " ATIVADO.", Toast.LENGTH_SHORT).show();
+            });
+
+            TextView infoView = label(info, 10, i == active ? TEXT : MUTED, false);
+            infoView.setMaxLines(5);
+            row.addView(infoView, new LinearLayout.LayoutParams(0, -2, 1f));
+
+            TextView export = label("EXPORTAR", 10, Color.WHITE, true);
+            export.setGravity(Gravity.CENTER);
+            export.setClickable(true);
+            export.setFocusable(true);
+            export.setBackground(new RippleDrawable(
+                    ColorStateList.valueOf(Color.argb(70, 255, 255, 255)),
+                    rounded(Color.rgb(47, 80, 120), 14, Color.TRANSPARENT), null));
+            export.setContentDescription("Exportar o " + (i + 1) + "º save de " + gameTitle);
+            export.setOnClickListener(v -> exportSaveFile(gameId, gameTitle, slotIndex, slot.toString()));
+            row.addView(export, new LinearLayout.LayoutParams(dp(86), dp(40)));
+
+            if (i > 0) card.addView(supportDivider());
+            card.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        }
+    }
+
+    /** Exporta um save como arquivo de texto em Downloads › C-F-A. */
+    private void exportSaveFile(String gameId, String gameTitle, int slotIndex, String content) {
+        try {
+            String fileName = "CFA-SAVE-" + gameId.toUpperCase(Locale.US) + "-" + (slotIndex + 1) + ".txt";
+            String text = "C-F-A · SAVE DE " + gameTitle + " (SAVE " + (slotIndex + 1) + ")\n"
+                    + "JOGO: " + gameId + "\n"
+                    + "DADOS: " + content + "\n";
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
+                values.put(MediaStore.Downloads.MIME_TYPE, "text/plain");
+                values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/C-F-A");
+                Uri saved = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                if (saved == null) throw new java.io.IOException("Não foi possível criar o arquivo.");
+                try (OutputStream output = getContentResolver().openOutputStream(saved)) {
+                    if (output == null) throw new java.io.IOException("Não foi possível abrir o arquivo.");
+                    output.write(text.getBytes(StandardCharsets.UTF_8));
+                    output.flush();
+                }
+                Toast.makeText(this, "SAVE EXPORTADO EM DOWNLOADS › C-F-A.", Toast.LENGTH_LONG).show();
+            } else {
+                File directory = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "C-F-A");
+                if (!directory.isDirectory() && !directory.mkdirs() && !directory.isDirectory())
+                    throw new java.io.IOException("Não foi possível criar a pasta.");
+                File file = new File(directory, fileName);
+                try (FileOutputStream output = new FileOutputStream(file)) {
+                    output.write(text.getBytes(StandardCharsets.UTF_8));
+                    output.flush();
+                }
+                Toast.makeText(this, "SAVE EXPORTADO EM DOWNLOADS › C-F-A.", Toast.LENGTH_LONG).show();
+            }
+        } catch (Exception error) {
+            Toast.makeText(this, "Não foi possível exportar o save.", Toast.LENGTH_LONG).show();
+        }
+    }
+
     private View gameCard(String title, String detail, String iconName, String id, int iconRes) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.HORIZONTAL);
@@ -1372,7 +1776,27 @@ public final class MainActivity extends Activity {
             @JavascriptInterface public void reportStoryDay(int unlockedDay) {
                 // O diário original tem seis dias; dia 7 significa história concluída.
                 if (unlockedDay < 1 || unlockedDay > 7) return;
-                appPrefs.edit().putInt("algorithomus_story_day", unlockedDay).apply();
+                setStoryDay(unlockedDay);
+                runOnUiThread(() -> refreshScoreBoard());
+            }
+
+            @JavascriptInterface public void reportResult(String gameId, boolean won, int score) {
+                if (!won || score < 0 || score > 1000000000) return;
+                synchronized (MainActivity.this) {
+                    if (session != scoreSession) return;
+                    if (!gameOpen || activeGameId == null || !activeGameId.equals(gameId)) return;
+                    long meta = "frutris".equals(gameId) ? FRUTRIS_WIN_SCORE : COBRINHA_WIN_SCORE;
+                    addSlotPoints(gameId, "s", meta);
+                    addSlotPoints(gameId, "w", 1L);
+                }
+                runOnUiThread(() -> refreshScoreBoard());
+            }
+
+            @JavascriptInterface public boolean consumeResetRequest(String gameId) {
+                String key = gameId + "_reset_pending";
+                if (!appPrefs.getBoolean(key, false)) return false;
+                appPrefs.edit().putBoolean(key, false).apply();
+                return true;
             }
             @JavascriptInterface public void reportScore(String gameId, int score) {
                 if (score < 0 || score > 1000000000) return;
@@ -1386,10 +1810,7 @@ public final class MainActivity extends Activity {
                     int delta = score - lastReportedScore;
                     if (delta <= 0) return;
                     lastReportedScore = score;
-                    String key = gameId + "_points";
-                    long current = appPrefs.getLong(key, 0L);
-                    long updated = current > Long.MAX_VALUE - delta ? Long.MAX_VALUE : current + delta;
-                    appPrefs.edit().putLong(key, updated).apply();
+                    addSlotPoints(gameId, "i", delta);
                 }
             }
         }, "CFAndroid");
