@@ -600,6 +600,35 @@ public final class MainActivity extends Activity {
             noteParams.topMargin = dp(12);
             supportCard.addView(note, noteParams);
 
+            LinearLayout socialCard = new LinearLayout(this);
+            socialCard.setOrientation(LinearLayout.VERTICAL);
+            socialCard.setPadding(dp(16), dp(14), dp(16), dp(12));
+            socialCard.setBackground(rounded(CARD, 18, Color.rgb(47, 49, 55)));
+            LinearLayout.LayoutParams socialCardParams = new LinearLayout.LayoutParams(-1, -2);
+            socialCardParams.topMargin = dp(18);
+            body.addView(socialCard, socialCardParams);
+
+            TextView socialTitle = label("REDES SOCIAIS DO TORAJO", 16, TEXT, true);
+            socialTitle.setLetterSpacing(.06f);
+            socialCard.addView(socialTitle, new LinearLayout.LayoutParams(-1, dp(30)));
+            TextView socialSubtitle = label("Siga o Torajo em todas as redes e ouça as músicas oficiais.", 12, MUTED, false);
+            socialSubtitle.setMaxLines(3);
+            socialCard.addView(socialSubtitle, new LinearLayout.LayoutParams(-1, -2));
+
+            socialCard.addView(supportLinkItem("INSTAGRAM", "Perfil oficial @mundo.torajo", "https://www.instagram.com/mundo.torajo/"));
+            socialCard.addView(supportDivider());
+            socialCard.addView(supportLinkItem("TIKTOK", "Perfil oficial @torajo_yt", "https://www.tiktok.com/@torajo_yt"));
+            socialCard.addView(supportDivider());
+            socialCard.addView(supportLinkItem("X · TWITTER", "Perfil oficial @Torajo_yt", "https://x.com/Torajo_yt"));
+            socialCard.addView(supportDivider());
+            socialCard.addView(supportLinkItem("DISCORD", "Servidor oficial do Mundo Torajo", "https://discord.gg/mundotorajo"));
+            socialCard.addView(supportDivider());
+            socialCard.addView(supportLinkItem("MENSAGENS · LIVEPIX", "Mande uma mensagem ao Torajo", "https://livepix.gg/torajo"));
+            socialCard.addView(supportDivider());
+            socialCard.addView(supportLinkItem("SPOTIFY", "Ouça as músicas oficiais no Spotify", "https://open.spotify.com/artist/1cWyhd5vnaH3hVAksS9TTe"));
+            socialCard.addView(supportDivider());
+            socialCard.addView(supportLinkItem("YOUTUBE MUSIC", "Ouça as músicas oficiais no YouTube Music", "https://music.youtube.com/channel/UCFnAcfR_-EsLkNJ3FkqB1AA"));
+
             LinearLayout qrCard = new LinearLayout(this);
             qrCard.setOrientation(LinearLayout.VERTICAL);
             qrCard.setPadding(dp(16), dp(14), dp(16), dp(12));
